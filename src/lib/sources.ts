@@ -1,3 +1,4 @@
+// src/lib/sources.ts
 import fs from "fs/promises";
 import path from "path";
 import type { Source } from "@/types";
