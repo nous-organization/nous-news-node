@@ -143,7 +143,9 @@ export async function getP2PNode(config?: NodeConfig): Promise<NodeInstance> {
 	let articleFederatedDB: ArticleFederatedDB;
 	try {
 		// --- Setup DBs ---
-		debugDB = await setupDebugDB(orbitdb, nodeConfig.orbitDBPath);
+		// Pass configured HTTP port through so the debug DB startup entry
+		// can include the actual server port instead of relying on env var.
+		debugDB = await setupDebugDB(orbitdb, nodeConfig.orbitDBPath, nodeConfig?.httpPort);
 
 		await new Promise((res) => setTimeout(res, 10));
 

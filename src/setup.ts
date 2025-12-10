@@ -137,6 +137,9 @@ export async function startP2PNode(config: NodeConfig): Promise<NodeInstance> {
 		blockstorePath,
 
 		// Pass custom database methods
+		// Keep the original debugDB object available so route registrars
+		// can check for `context.debugDB` and call its methods.
+		debugDB,
 		...debugDB,
 		...articleLocalDB,
 		...articleAnalyzedDB,

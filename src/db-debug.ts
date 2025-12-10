@@ -22,7 +22,7 @@ let debugDBInstance: DebugDB | null = null;
  * @param prefixPath - Folder holding OrbitDb databases
  * @returns DB instance and helper methods for logging and retrieving entries.
  */
-export async function setupDebugDB(orbitdb: OrbitDB, prefixPath: string) {
+export async function setupDebugDB(orbitdb: OrbitDB, prefixPath: string, port?: number | string) {
 	if (debugDBInstance) {
 		log("🟢 Debug DB already initialized, skipping setup");
 		return debugDBInstance;
@@ -89,12 +89,13 @@ export async function setupDebugDB(orbitdb: OrbitDB, prefixPath: string) {
 	try {
 		const existingEntries = await db.query(() => true);
 		if (existingEntries.length === 0) {
+			const portVal = port ?? process.env.HTTP_PORT ?? "unknown";
 			await add({
 				_id: crypto.randomUUID(),
 				timestamp: new Date().toISOString(),
 				message: "Node debug DB initialized",
 				level: "info",
-				meta: { port: process.env.HTTP_PORT || "unknown" },
+				meta: { port: String(portVal) },
 			});
 		}
 	} catch (err) {
