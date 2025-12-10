@@ -3,8 +3,8 @@ import type { ArticleAnalyzedDB } from "@/db-articles-analyzed";
 import type { ArticleLocalDB } from "@/db-articles-local";
 import type { BaseServerContext } from "@/httpServer";
 import { analyzeArticle } from "@/lib/ai";
-import { translateMultipleTitlesAI } from "@/lib/ai/translate.server";
-import { addDebugLog, log } from "@/lib/log.server";
+import { translateMultipleTitlesAI } from "@/lib/ai/translate";
+import { addDebugLog, log } from "@/lib/log";
 import type { ApiResponse, Article, ArticleAnalyzed, Source } from "@/types";
 import { handleError } from "./helpers";
 

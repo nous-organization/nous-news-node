@@ -1,15 +1,15 @@
 // frontend/src/p2p/db-articles-local.ts
 import { Documents, IPFSAccessController, type OrbitDB } from "@orbitdb/core";
 import type { Helia } from "helia";
-import { smartFetch } from "@/lib/fetch.server";
-import { addDebugLog, log } from "@/lib/log.server";
+import { smartFetch } from "@/lib/fetch";
+import { addDebugLog, log } from "@/lib/log";
 import { getNormalizer, normalizePublishedAt } from "@/lib/normalizers/aggregate-sources";
 import { cleanArticlesForDB, getParser } from "@/lib/parsers/aggregate-sources";
 import type { ArticleAnalyzed, Source } from "@/types";
 import { type Article, ArticleSchema } from "@/types/article";
-import { translateMultipleTitlesAI } from "./lib/ai/translate.server";
-import { loadFullArticle } from "./lib/article.server";
-import { saveArticleToIPFS } from "./lib/ipfs.server";
+import { translateMultipleTitlesAI } from "./lib/ai/translate";
+import { loadFullArticle } from "./lib/article";
+import { saveArticleToIPFS } from "./lib/ipfs";
 import { getRunningInstance } from "./node";
 import { loadDBPaths, saveDBPaths } from "./setup";
 

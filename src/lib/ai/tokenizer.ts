@@ -1,10 +1,10 @@
-// src/services/ai/tokenizer.server.ts
+// src/services/ai/tokenizer.ts
 import fs from "node:fs";
 import path from "node:path";
 import { XLMRobertaTokenizer } from "@xenova/transformers";
 
-// Import your model cache directory constant from models.server.ts
-import { MODEL_DIR } from "./models.server";
+// Import your model cache directory constant from models.ts
+import { MODEL_DIR } from "./models";
 
 // Internal cached singleton instance (or promise resolving to it)
 let tokenizerPromise: Promise<XLMRobertaTokenizer> | null = null;

@@ -1,7 +1,7 @@
 // frontend/src/p2p/networkStatus.ts
 import type { Helia } from "helia";
-import { addDebugLog, log } from "@/lib/log.server";
-import { updateStatus } from "@/lib/status.server";
+import { addDebugLog, log } from "@/lib/log";
+import { updateStatus } from "@/lib/status";
 import type { ConnectionInfo, NodeStatus } from "@/types";
 
 export function startNetworkStatusPoll(helia: Helia, status: NodeStatus, interval = 5000) {

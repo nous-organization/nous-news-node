@@ -9,7 +9,7 @@ import { webRTC } from "@libp2p/webrtc";
 import { webTransport } from "@libp2p/webtransport";
 import { type Multiaddr, multiaddr } from "@multiformats/multiaddr";
 import { createLibp2p, type Libp2p } from "libp2p";
-import { addDebugLog, log } from "@/lib/log.server";
+import { addDebugLog, log } from "@/lib/log";
 // import { kadDHT } from '@libp2p/kad-dht'
 
 /**

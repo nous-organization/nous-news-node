@@ -2,13 +2,13 @@
 
 import type { Article } from "@/types/article";
 import type { ArticleAnalyzed } from "@/types/article-analyzed";
-import { detectCognitiveBias } from "./cognitiveBias.server";
-import { detectPoliticalBias } from "./politicalBias.server";
-import { analyzeSentiment } from "./sentiment.server";
+import { detectCognitiveBias } from "./cognitiveBias";
+import { detectPoliticalBias } from "./politicalBias";
+import { analyzeSentiment } from "./sentiment";
 import {
 	generateAntithesis,
 	generatePhilosophicalInsight,
-} from "./summarizer.server";
+} from "./summarizer";
 
 /**
  * Main AI interface to analyze a single article.

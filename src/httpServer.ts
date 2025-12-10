@@ -5,16 +5,18 @@ import cors from "cors";
 import express, { type Express } from "express";
 import type { Helia } from "helia";
 import type { NodeStatus } from "@/types";
-import { log } from "./lib/log.server";
+import { log, setBroadcastFn } from "./lib/log";
+import { WebSocketServer } from "ws";
 import { registerFederatedArticleRoutes } from "./routes/route-articles-federated";
 import { registerLocalArticleRoutes } from "./routes/route-articles-local";
+import { registerSourceRoutes } from "./routes/route-sources";
 // Import the new-style route registration functions
 import { registerDebugLogRoutes } from "./routes/route-log";
 import { registerStatusRoutes } from "./routes/route-status";
 import { registerDashboardRoutes } from "./routes/route-dashboard";
 
 // Base URL for reference (useful for logging or generating URLs)
-export const BASE_URL = "http://localhost";
+export const BASE_URL = process.env.BASE_URL ?? "http://localhost";
 
 // src/p2p/httpServer.ts
 export interface BaseServerContext {
@@ -69,6 +71,10 @@ export function createHttpServer(
 		registerStatusRoutes(app);
 	}
 
+	if (registerSourceRoutes) {
+		registerSourceRoutes(app);
+	}
+
 	if (registerLocalArticleRoutes) {
 		registerLocalArticleRoutes(app, context);
 	}
@@ -85,6 +91,39 @@ export function createHttpServer(
 	// Express -> Node HTTP server
 	//------------------------------------------------------------
 	const server = http.createServer(app);
+
+	// WebSocket server (live events)
+	try {
+		const wss = new WebSocketServer({ server, path: "/ws" });
+
+		function broadcastEvent(event: any) {
+			const msg = JSON.stringify(event);
+			for (const client of wss.clients) {
+				// @ts-ignore - ws client type
+				if ((client as any).readyState === (client as any).OPEN) {
+					(client as any).send(msg);
+				}
+			}
+		}
+
+		// Expose broadcaster to logging helpers
+		try {
+			setBroadcastFn((ev: any) => {
+				try {
+					broadcastEvent(ev);
+				} catch (_) {}
+			});
+		} catch (e) {
+			// ignore if log not available
+		}
+
+		wss.on("connection", (socket: any) => {
+			log("🔌 WS client connected");
+			socket.on("close", () => log("🔌 WS client disconnected"));
+		});
+	} catch (e) {
+		log("⚠️ WebSocket server not started: " + (e as Error).message, "warn");
+	}
 
 	server.listen(httpPort, () => {
 		console.log(`P2P node HTTP API running on ${BASE_URL}:${httpPort}`);

@@ -1,6 +1,6 @@
 // src/lib/parsers/sources/generic.ts
 import { JSDOM } from "jsdom";
-import { cleanHTML } from "@/lib/ai/normalize.server";
+import { cleanHTML } from "@/lib/ai/normalize";
 import type { ArticleParser } from "@/types/parser";
 
 /**

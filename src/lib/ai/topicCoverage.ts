@@ -1,5 +1,5 @@
 /**
- * @file topicCoverage.server.ts
+ * @file topicCoverage.ts
  * @description Track topic coverage per source and detect blindspots.
  */
 

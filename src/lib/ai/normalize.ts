@@ -1,7 +1,7 @@
 import { JSDOM } from "jsdom";
-import { getPipeline } from "./models.server";
-import { getTokenizer } from "./tokenizer.server";
-import { translateContentAI } from "./translate.server";
+import { getPipeline } from "./models";
+import { getTokenizer } from "./tokenizer";
+import { translateContentAI } from "./translate";
 
 /**
  * Example usage:

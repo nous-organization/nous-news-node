@@ -5,9 +5,9 @@ import { analyzeArticle } from "./ai";
 import {
 	type NormalizedArticle,
 	normalizeAndTranslateArticle,
-} from "./ai/normalize.server";
-import { smartFetch } from "./fetch.server";
-import { fetchArticleFromIPFS } from "./ipfs.server";
+} from "./ai/normalize";
+import { smartFetch } from "./fetch";
+import { fetchArticleFromIPFS } from "./ipfs";
 import { getParserForUrl } from "./parsers/sources";
 
 /**

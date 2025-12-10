@@ -1,5 +1,5 @@
 /**
- * @file ai/sources/adfontes.server.ts
+ * @file ai/sources/adfontes.ts
  * @description
  * Fetch + normalize ratings from Ad Fontes Media using the **official CSV dataset**.
  *

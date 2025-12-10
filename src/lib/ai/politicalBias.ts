@@ -1,6 +1,6 @@
 import type { ArticleAnalyzed } from "@/types/article-analyzed";
-import { getPipeline } from "./models.server";
-import { getTokenizer } from "./tokenizer.server";
+import { getPipeline } from "./models";
+import { getTokenizer } from "./tokenizer";
 
 /**
  * Detect the political bias of an article using a lightweight

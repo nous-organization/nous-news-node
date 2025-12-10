@@ -2,7 +2,7 @@
 import { dagCbor } from "@helia/dag-cbor";
 import type { Helia } from "helia";
 import { CID } from "multiformats/cid";
-import { addDebugLog, log } from "@/lib/log.server";
+import { addDebugLog, log } from "@/lib/log";
 import type { ArticleFederated } from "@/types";
 
 export interface ArticleFederatedDB {

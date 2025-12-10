@@ -1,6 +1,6 @@
 // frontend/server/src/routes/helpers.ts
 import type { ServerResponse } from "node:http";
-import { addDebugLog } from "@/lib/log.server";
+import { addDebugLog } from "@/lib/log";
 
 /**
  * Handles an HTTP error response in a standardized way.

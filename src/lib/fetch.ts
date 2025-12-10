@@ -1,4 +1,4 @@
-// frontend/server/src/lib/fetch.server.ts
+// frontend/server/src/lib/fetch.ts
 
 /**
  * A rotating list of realistic browser User-Agent strings used to prevent

@@ -1,5 +1,5 @@
 /**
- * @file ipfs.server.ts
+ * @file ipfs.ts
  * @description
  * Utility helpers for storing and retrieving content via Helia using modern modules:
  *  - Strings (@helia/strings)

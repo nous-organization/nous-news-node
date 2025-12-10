@@ -5,8 +5,8 @@
  * with GPT-2 tokenizer truncation to prevent model overflow errors.
  */
 
-import { getPipeline, MODEL_DIR } from "./models.server";
-import { getTokenizer } from "./tokenizer.server";
+import { getPipeline, MODEL_DIR } from "./models";
+import { getTokenizer } from "./tokenizer";
 
 //
 // ---------------------------------------------------------

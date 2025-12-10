@@ -1,7 +1,7 @@
 import { getCognitiveBiasPrompt } from "@/prompts/bias-cognitive";
 import type { CognitiveBias } from "@/types/article-analyzed";
-import { getPipeline } from "./models.server";
-import { getTokenizer } from "./tokenizer.server";
+import { getPipeline } from "./models";
+import { getTokenizer } from "./tokenizer";
 
 const MAX_TOKENS = 1024; // Max tokens supported by distilbert-sst2
 const MAX_GPT2_PROMPT_TOKENS = 512; // Safe limit for GPT-2 prompt

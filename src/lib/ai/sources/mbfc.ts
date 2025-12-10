@@ -1,5 +1,5 @@
 /**
- * @file ai/sources/mbfc.server.ts
+ * @file ai/sources/mbfc.ts
  * @description
  * Fetch + normalize bias and factuality ratings from Media Bias/Fact Check (MBFC)
  * using the official RapidAPI service.
@@ -25,7 +25,7 @@
 import { SourceMetaPartial, Factuality } from "@/types";
 import { normalizeBias } from "./helpers";
 import { z } from "zod";
-import { smartFetch } from "@/lib/fetch.server";
+import { smartFetch } from "@/lib/fetch";
 
 const MBFC_API_BASE = "https://media-bias-fact-check-ratings-api2.p.rapidapi.com/fetch-data";
 

@@ -2,7 +2,7 @@
 import type { Express, Request, Response } from "express";
 import type { ArticleAnalyzedDB } from "@/db-articles-analyzed";
 import type { BaseServerContext } from "@/httpServer";
-import { addDebugLog, log } from "@/lib/log.server";
+import { addDebugLog, log } from "@/lib/log";
 import type { ArticleAnalyzed } from "@/types";
 import { handleError } from "./helpers";
 

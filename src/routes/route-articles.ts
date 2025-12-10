@@ -6,7 +6,7 @@
  */
 
 import type { Express, NextFunction, Request, Response } from "express";
-import { log } from "@/lib/log.server";
+import { log } from "@/lib/log";
 import type { Article } from "@/types";
 import { handleError } from "./helpers";
 

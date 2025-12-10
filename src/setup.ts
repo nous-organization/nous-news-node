@@ -1,15 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
 import { DB_PATH_FILE_PATH } from "@/constants";
-import { log } from "@/lib/log.server";
-import { loadStatus, updateStatus } from "@/lib/status.server";
+import { log } from "@/lib/log";
+import { loadStatus, updateStatus } from "@/lib/status";
 import type { NodeConfig } from "@/types";
 import type { ArticleAnalyzedDB } from "./db-articles-analyzed";
 import type { ArticleFederatedDB } from "./db-articles-federated";
 import type { ArticleLocalDB } from "./db-articles-local";
 import type { DebugDB } from "./db-debug";
 import { createHttpServer, type HttpServerContext } from "./httpServer";
-import { prefetchModels } from "./lib/ai/models.server";
+import { prefetchModels } from "./lib/ai/models";
 import { startNetworkStatusPoll } from "./networkStatus";
 import { getP2PNode, type NodeInstance, setRunningInstance } from "./node";
 import { registerShutdownHandlers } from "./shutdown";

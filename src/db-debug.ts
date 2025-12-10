@@ -1,6 +1,6 @@
 // frontend/src/lib/db-debug.ts
 import { Documents, type OrbitDB } from "@orbitdb/core";
-import { log } from "@/lib/log.server";
+import { log } from "@/lib/log";
 import type { DebugLogEntry } from "@/types/log";
 import { loadDBPaths, saveDBPaths } from "./setup";
 

@@ -1,14 +1,14 @@
 /**
- * @file sourceMeta.server.ts
+ * @file sourceMeta.ts
  * @description Unified library to fetch or map media bias ratings from major sources.
  * Uses live sources: MBFC, AllSides, AdFontes, plus static fallback.
  */
 
 import { DEFAULT_SOURCES } from "@/constants/sources";
-import { fetchAdFontes } from "@/lib/ai/sources/adfontes.server";
-import { fetchAllSides } from "@/lib/ai/sources/allsides.server";
+import { fetchAdFontes } from "@/lib/ai/sources/adfontes";
+import { fetchAllSides } from "@/lib/ai/sources/allsides";
 import { computeUnifiedBias } from "@/lib/ai/sources/helpers";
-import { fetchMBFC } from "@/lib/ai/sources/mbfc.server";
+import { fetchMBFC } from "@/lib/ai/sources/mbfc";
 import type { Factuality, PoliticalBias, SourceMetaFull } from "@/types";
 
 /**

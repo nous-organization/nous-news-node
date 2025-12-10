@@ -1,5 +1,5 @@
 /**
- * @file ai/sources/allsides.server.ts
+ * @file ai/sources/allsides.ts
  * @description
  * Provides functions to fetch AllSides media bias ratings using the official API.
  *
@@ -14,7 +14,7 @@
 import { SourceMetaPartial } from "@/types";
 import { normalizeBias } from "./helpers";
 import { z } from "zod";
-import { smartFetch } from "@/lib/fetch.server";
+import { smartFetch } from "@/lib/fetch";
 
 const ALLSIDES_API_BASE = "https://www.allsides.com/api/media-bias-ratings";
 

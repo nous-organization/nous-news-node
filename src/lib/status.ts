@@ -1,4 +1,4 @@
-// frontend/server/src/lib/status.server.ts
+// frontend/server/src/lib/status.ts
 import fs from "node:fs";
 import path from "node:path";
 import { STATUS_FILE_PATH } from "@/constants";

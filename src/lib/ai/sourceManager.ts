@@ -1,6 +1,6 @@
 /**
  * Coming soon
- * @file sourceManager.server.ts
+ * @file sourceManager.ts
  * @description Library for managing sources, including user-added sources with validation.
  */
 

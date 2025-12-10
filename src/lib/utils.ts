@@ -1,4 +1,4 @@
-// frontend/server/src/lib/utils.server.ts
+// frontend/server/src/lib/utils.ts
 import fs from "node:fs";
 import path from "node:path";
 import { dagCbor } from "@helia/dag-cbor";

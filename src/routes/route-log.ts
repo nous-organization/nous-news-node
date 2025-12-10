@@ -1,6 +1,6 @@
 // frontend/src/p2p/routes/route-log.ts
 import type { Router } from "express";
-import { log } from "@/lib/log.server";
+import { log } from "@/lib/log";
 import type { DebugLogEntry } from "@/types/log";
 
 /**

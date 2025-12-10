@@ -1,4 +1,4 @@
-// server/src/server/log.server.ts
+// server/src/server/log.ts
 
 import { getRunningInstance, type NodeInstance } from "@/node";
 import type { DebugLogEntry } from "@/types";
@@ -22,8 +22,14 @@ export function log(message: string, level: "info" | "warn" | "error" = "info") 
 	}
 }
 
+// Optional broadcaster callback for live events (set by HTTP server)
+let broadcastFn: ((ev: any) => void) | null = null;
+export function setBroadcastFn(fn: (ev: any) => void) {
+	broadcastFn = fn;
+}
+
 /**
- * Stub function: addDebugLog now just logs to console
+ * Stub function: addDebugLog now just logs to console and optionally broadcasts
  */
 export async function addDebugLog(
 	entry: {
@@ -47,6 +53,15 @@ export async function addDebugLog(
 	if (logEntry.level === "warn") console.warn(prefix);
 	else if (logEntry.level === "error") console.error(prefix);
 	else console.log(prefix);
+
+	// Broadcast to any live WS clients
+	try {
+		if (broadcastFn) {
+			broadcastFn({ type: "debug-log", payload: logEntry });
+		}
+	} catch (e) {
+		// ignore broadcast failures
+	}
 
 	const runningInstance = getRunningInstance();
 	if (!runningInstance) {

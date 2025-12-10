@@ -1,5 +1,5 @@
-import { getPipeline } from "./models.server";
-import { getTokenizer } from "./tokenizer.server";
+import { getPipeline } from "./models";
+import { getTokenizer } from "./tokenizer";
 
 /**
  * Generate an AI-powered summary using a local transformer model.

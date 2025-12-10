@@ -1,7 +1,7 @@
 // frontend/server/src/shutdown.ts
-import { log } from "@/lib/log.server";
-import { deleteStatus } from "@/lib/status.server";
-import { cleanLockFiles } from "@/lib/utils.server";
+import { log } from "@/lib/log";
+import { deleteStatus } from "@/lib/status";
+import { cleanLockFiles } from "@/lib/utils";
 import { getRunningInstance } from "./node";
 import type { P2PDatabases } from "./setup";
 
