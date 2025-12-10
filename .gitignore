@@ -1,0 +1,58 @@
+# ---------------------------
+# Node 
+# ---------------------------
+dist/
+package-lock.json
+package.json.md5
+.nous
+.models
+
+# ---------------------------
+# Build output
+# ---------------------------
+build/*
+!build/appicon.png
+*.exe
+*.dll
+*.so
+*.dylib
+*.app
+bin/
+.node-cache
+
+# ---------------------------
+# OrbitDB / Helia
+# ---------------------------
+orbitdb/
+orbitdb-keystore/
+orbitdb*/
+orbitdb-keystore*/
+helia-repo/
+data/
+!src/orbitdb
+
+# ---------------------------
+# OS / IDE / Temp
+# ---------------------------
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.swp
+*.swo
+.vscode/
+.idea/
+*.bak
+*.tsbuildinfo
+
+# ---------------------------
+# Go specific
+# ---------------------------
+*.test
+*.out
+
+# ---------------------------
+# Misc
+# ---------------------------
+.env
+.env.local

@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "allowSyntheticDefaultImports": true,
+
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "resolveJsonModule": true,
+
+    // Backend-only source root
+    "rootDir": ".",
+    "outDir": "dist",
+
+    // Path alias base = backend root
+    "baseUrl": "src",
+
+    "paths": {
+      "@/*": ["*"]
+    }
+  },
+
+  "include": ["src/**/*"]
+}
