@@ -11,6 +11,7 @@ import { registerLocalArticleRoutes } from "./routes/route-articles-local";
 // Import the new-style route registration functions
 import { registerDebugLogRoutes } from "./routes/route-log";
 import { registerStatusRoutes } from "./routes/route-status";
+import { registerDashboardRoutes } from "./routes/route-dashboard";
 
 // Base URL for reference (useful for logging or generating URLs)
 export const BASE_URL = "http://localhost";
@@ -74,6 +75,10 @@ export function createHttpServer(
 
 	if (registerFederatedArticleRoutes) {
 		registerFederatedArticleRoutes(app, context);
+	}
+
+	if (registerDashboardRoutes) {
+		registerDashboardRoutes(app, context);
 	}
 
 	//------------------------------------------------------------

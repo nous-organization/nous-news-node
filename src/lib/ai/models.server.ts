@@ -3,13 +3,18 @@ import path from "node:path";
 import { env, type PipelineType, pipeline } from "@xenova/transformers";
 import * as ort from "onnxruntime-node";
 
+const MODELS_PATH = path.join(process.cwd(), process.env.MODELS_PATH ?? ".models");
+
 // ------------------------------------------------------
 // Transformer Model Loader (Node.js)
 // Uses Transformers.js for local inference (WASM / ONNX / WebGPU).
 // ------------------------------------------------------
-// Before loading any model:
-ort.env.ORT_LOGGING_LEVEL = "WARNING"; // options: VERBOSE, INFO, WARNING, ERROR, FATAL
-
+// Set logging level
+if (ort.env) {
+  ort.env.ORT_LOGGING_LEVEL = 'WARNING'; // VERBOSE, INFO, WARNING, ERROR, FATAL
+} else {
+  console.warn('onnxruntime-node env object not available, skipping ORT_LOGGING_LEVEL');
+}
 // Allow local and remote model loading
 env.allowLocalModels = true;
 env.allowRemoteModels = true;
@@ -141,26 +146,36 @@ export async function getPipeline(
 
 /**
  * Prefetch all known models into memory at startup.
- * Useful to warm up pipelines so subsequent inferences are faster.
+ * Skips models that already exist on disk.
  */
 export async function prefetchModels(): Promise<void> {
-	for (const key of Object.keys(MODELS)) {
-		try {
-			console.log(`Prefetching model '${key}'...`);
+  if (!fs.existsSync(MODELS_PATH)) fs.mkdirSync(MODELS_PATH, { recursive: true });
 
-			let task: PipelineType = "feature-extraction";
-			if (key.includes("sst2")) task = "text-classification";
-			else if (key.includes("ner")) task = "token-classification";
-			else if (key.includes("bart") || key.includes("cnn"))
-				task = "summarization";
-			else if (key.includes("translate") || key.includes("mbart"))
-				task = "translation";
-			else if (key === "gpt2") task = "text-generation";
+  for (const key of Object.keys(MODELS)) {
+    const modelPath = path.join(MODELS_PATH, key);
 
-			await getPipeline(task, key, false); // localFilesOnly = false → fetch if missing
-			console.log(`Model '${key}' prefetched successfully.`);
-		} catch (err) {
-			console.error(`Failed to prefetch model '${key}':`, err);
-		}
-	}
+    // Skip prefetch if model already exists
+    if (fs.existsSync(modelPath)) {
+      console.log(`Model '${key}' already exists. Skipping prefetch.`);
+      continue;
+    }
+
+    try {
+      console.log(`Prefetching model '${key}'...`);
+
+      let task: PipelineType = "feature-extraction";
+      if (key.includes("sst2")) task = "text-classification";
+      else if (key.includes("ner")) task = "token-classification";
+      else if (key.includes("bart") || key.includes("cnn"))
+        task = "summarization";
+      else if (key.includes("translate") || key.includes("mbart"))
+        task = "translation";
+      else if (key === "gpt2") task = "text-generation";
+
+      await getPipeline(task, key, false); // fetch if missing
+      console.log(`Model '${key}' prefetched successfully.`);
+    } catch (err) {
+      console.error(`Failed to prefetch model '${key}':`, err);
+    }
+  }
 }
