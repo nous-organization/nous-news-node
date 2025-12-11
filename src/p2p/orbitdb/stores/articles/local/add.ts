@@ -19,8 +19,7 @@ export async function add(
 	doc: Article | ArticleAnalyzed,
 	overwrite = true,
 ): Promise<boolean | null> {
-	const { articleLocalDB: db } = getInstance();
-
+	const db = getInstance();
 	if (!overwrite) {
 		const exists = await db.get(doc.url);
 		if (exists) return null;

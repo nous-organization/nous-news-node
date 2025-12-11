@@ -6,6 +6,7 @@
  */
 
 import type { Express, NextFunction, Request, Response } from "express";
+import { getJobStatus } from "@/lib/jobs";
 import { addDebugLog } from "@/lib/log";
 import {
 	getByIdentifier,
@@ -98,10 +99,38 @@ export const getArticleHandler = async (req: Request, res: Response) => {
 };
 
 /**
+ * GET /articles/job-status?jobId=...
+ * Returns the status of a background fetch job
+ */
+export const getJobStatusHandler = (req: Request, res: Response) => {
+	const jobId = req.query.jobId as string;
+
+	if (!jobId) {
+		return handleError(res, "Missing jobId query parameter", 400, "warn");
+	}
+
+	const job = getJobStatus(jobId);
+
+	if (!job) {
+		return handleError(res, `Job not found: ${jobId}`, 404, "warn");
+	}
+
+	res.json({
+		success: true,
+		jobId,
+		source: job.source,
+		status: job.status,
+		message: job.message,
+		createdAt: job.createdAt,
+	});
+};
+
+/**
  * Helper: register all article routes in an Express app
  *
  * @param app Express application instance
  */
 export function registerArticleRoutes(app: Express) {
-	app.get("/api/article", throttleMiddleware, getArticleHandler);
+	app.get("/articles", throttleMiddleware, getArticleHandler);
+	app.get("/articles/job-status", getJobStatusHandler);
 }

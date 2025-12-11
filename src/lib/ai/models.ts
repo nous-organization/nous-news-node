@@ -1,21 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
 import { env, type PipelineType, pipeline } from "@xenova/transformers";
-import * as ort from "onnxruntime-node";
 
-const MODELS_PATH = path.join(process.cwd(), process.env.MODELS_PATH ?? ".models");
+const MODELS_PATH = path.join(
+	process.cwd(),
+	process.env.MODELS_PATH ?? ".models",
+);
 
-// ------------------------------------------------------
-// Transformer Model Loader (Node.js)
-// Uses Transformers.js for local inference (WASM / ONNX / WebGPU).
-// ------------------------------------------------------
-// Set logging level
-if (ort.env) {
-  ort.env.ORT_LOGGING_LEVEL = 'WARNING'; // VERBOSE, INFO, WARNING, ERROR, FATAL
-} else {
-  console.warn('onnxruntime-node env object not available, skipping ORT_LOGGING_LEVEL');
-}
 // Allow local and remote model loading
+env.backends.onnx.logLevel = "fatal";
+env.backends.onnx.debug = false;
 env.allowLocalModels = true;
 env.allowRemoteModels = true;
 
@@ -91,19 +85,6 @@ export const MODELS: Record<string, string> = {
 const PIPELINE_CACHE: Record<string, Promise<any> | undefined> = {};
 
 /**
- * Check if local model folder exists.
- * Resolves the actual folder from the MODELS map.
- *
- * @param modelKey Key from MODELS
- * @returns True if local folder exists
- */
-function localModelExists(modelKey: string): boolean {
-	const modelRepo = MODELS[modelKey] ?? modelKey;
-	const modelPath = path.join(MODEL_DIR, modelRepo);
-	return fs.existsSync(modelPath) && fs.statSync(modelPath).isDirectory();
-}
-
-/**
  * Load or retrieve a cached pipeline.
  *
  * @param task Pipeline task (e.g. "text-classification", "feature-extraction", "text-generation", ...)
@@ -145,37 +126,52 @@ export async function getPipeline(
 }
 
 /**
+ * Resolve the actual local folder where a model would be cached.
+ * Handles nested org/repo structure (e.g., .models/Xenova/distilbert-base-uncased-finetuned-sst-2-english/Xenova)
+ *
+ * @param modelKey Key from MODELS or full repo string
+ * @returns Full path to the cached model folder
+ */
+function getLocalModelFolder(modelKey: string): string {
+	const modelRepo = MODELS[modelKey] ?? modelKey;
+	const modelPath = path.join(MODEL_DIR, modelRepo);
+	const orgFolder = path.join(modelPath, modelRepo.split("/")[0]); // e.g., Xenova, dnouv, facebook
+	return orgFolder;
+}
+
+/**
  * Prefetch all known models into memory at startup.
  * Skips models that already exist on disk.
  */
 export async function prefetchModels(): Promise<void> {
-  if (!fs.existsSync(MODELS_PATH)) fs.mkdirSync(MODELS_PATH, { recursive: true });
+	if (!fs.existsSync(MODELS_PATH))
+		fs.mkdirSync(MODELS_PATH, { recursive: true });
 
-  for (const key of Object.keys(MODELS)) {
-    const modelPath = path.join(MODELS_PATH, key);
+	for (const key of Object.keys(MODELS)) {
+		const folder = getLocalModelFolder(key);
 
-    // Skip prefetch if model already exists
-    if (fs.existsSync(modelPath)) {
-      console.log(`Model '${key}' already exists. Skipping prefetch.`);
-      continue;
-    }
+		// Skip prefetch if nested folder exists
+		if (fs.existsSync(folder)) {
+			console.log(`Model '${key}' already exists. Skipping prefetch.`);
+			continue;
+		}
 
-    try {
-      console.log(`Prefetching model '${key}'...`);
+		try {
+			console.log(`Prefetching model '${key}'...`);
 
-      let task: PipelineType = "feature-extraction";
-      if (key.includes("sst2")) task = "text-classification";
-      else if (key.includes("ner")) task = "token-classification";
-      else if (key.includes("bart") || key.includes("cnn"))
-        task = "summarization";
-      else if (key.includes("translate") || key.includes("mbart"))
-        task = "translation";
-      else if (key === "gpt2") task = "text-generation";
+			let task: PipelineType = "feature-extraction";
+			if (key.includes("sst2")) task = "text-classification";
+			else if (key.includes("ner")) task = "token-classification";
+			else if (key.includes("bart") || key.includes("cnn"))
+				task = "summarization";
+			else if (key.includes("translate") || key.includes("mbart"))
+				task = "translation";
+			else if (key === "gpt2") task = "text-generation";
 
-      await getPipeline(task, key, false); // fetch if missing
-      console.log(`Model '${key}' prefetched successfully.`);
-    } catch (err) {
-      console.error(`Failed to prefetch model '${key}':`, err);
-    }
-  }
+			await getPipeline(task, key, false, folder); // fetch into the correct folder
+			console.log(`Model '${key}' prefetched successfully.`);
+		} catch (err) {
+			console.error(`Failed to prefetch model '${key}':`, err);
+		}
+	}
 }

@@ -6,9 +6,12 @@
  */
 
 import type { Express, NextFunction, Request, Response } from "express";
+import { DEFAULT_SOURCES } from "@/constants/sources";
 import { analyzeArticle } from "@/lib/ai";
 import { translateMultipleTitlesAI } from "@/lib/ai/translate";
+import { setJobStatus } from "@/lib/jobs";
 import { addDebugLog, log } from "@/lib/log";
+import { fetchArticlesForSource, getMergedSources } from "@/lib/sources";
 import {
 	add as addArticle,
 	addUnique as addUniqueLocalArticles,
@@ -185,8 +188,17 @@ export const getAllLocalArticlesHandler = async (
 
 		res.json(articles);
 	} catch (err) {
-		const message = (err as Error).message || "Unknown error fetching articles";
-		await handleError(res, `Error fetching articles: ${message}`, 500, "error");
+		const message =
+			(err as Error)?.message || "Unknown error fetching articles";
+		log(`Error fetching local articles: ${message}`, "error");
+
+		// Return a client-friendly response instead of raw 500
+		res.status(500).json({
+			success: false,
+			message: "Failed to fetch local articles",
+			details: message, // optional for debugging
+			data: [],
+		});
 	}
 };
 
@@ -319,10 +331,88 @@ export const deleteLocalArticleHandler = async (
 };
 
 /**
+ * POST /articles/local/fetch/:sourceName
+ * Fetch articles from a single source by name
+ */
+/**
+ * POST /articles/local/fetch/:sourceName
+ * Fetch articles from a single source by name
+ */
+export const fetchSingleLocalSourceHandler = async (
+	req: Request,
+	res: Response,
+) => {
+	const sourceName = req.params.sourceName;
+	const targetLanguage = (req.query.language as string) || "en";
+	const skipTranslation = req.query.skipTranslation !== "false";
+
+	if (!sourceName) {
+		return handleError(res, "No source name provided", 400, "warn");
+	}
+
+	try {
+		const sources = await getMergedSources(DEFAULT_SOURCES);
+		const source = sources.find((s) => s.name === sourceName);
+
+		if (!source) {
+			return handleError(res, `Source not found: ${sourceName}`, 404, "warn");
+		}
+
+		const jobId = crypto.randomUUID();
+
+		// Initialize job status
+		setJobStatus(jobId, "queued", source.name);
+
+		// Fire-and-forget background job
+		(async () => {
+			try {
+				setJobStatus(jobId, "running", source.name);
+
+				const articles = await fetchArticlesForSource(
+					source,
+					targetLanguage,
+					skipTranslation,
+				);
+
+				if (articles.length > 0) {
+					await addUniqueLocalArticles(articles);
+				}
+
+				setJobStatus(jobId, "done", source.name);
+			} catch (err) {
+				const message = (err as Error).message;
+				setJobStatus(jobId, "error", source.name, message);
+			}
+		})();
+
+		res.json({
+			success: true,
+			message: `Fetch job queued for source '${source.name}'`,
+			jobId,
+			source: source.name,
+			status: "queued",
+		});
+	} catch (err) {
+		const message = (err as Error).message;
+		await handleError(
+			res,
+			`Error processing fetch for source "${sourceName}": ${message}`,
+			500,
+			"error",
+		);
+	}
+};
+
+/**
  * Helper: register all local article routes
  */
 export function registerLocalArticleRoutes(app: Express) {
 	app.post("/articles/local/fetch", fetchLocalArticlesHandler);
+	app.post(
+		"/articles/local/fetch/:sourceName",
+		throttleMiddleware,
+		fetchSingleLocalSourceHandler,
+	);
 	app.get("/articles/local", throttleMiddleware, getAllLocalArticlesHandler);
 	app.post("/articles/local/translate", translateArticleHandler);
 	app.get("/articles/local/full", getFullLocalArticleHandler);

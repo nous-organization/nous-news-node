@@ -47,6 +47,9 @@ export async function startP2PNode(config: NodeConfig) {
 	// Initialize core node (Libp2p, Helia, OrbitDB)
 	const node = await initNode(config);
 
+	node.status.connected = true; // libp2p
+	node.status.orbitConnected = true; // orbitdb
+
 	// Hot reload: stop previous network polling if any
 	if (stopNetworkPollFn) stopNetworkPollFn();
 	stopNetworkPollFn = startNetworkStatusPoll(node.helia, node.status);
@@ -65,7 +68,9 @@ export async function startP2PNode(config: NodeConfig) {
 		};
 
 		httpServerInstance = createHttpServer(httpPort, httpContext);
-
+		node.status.running = true;
+		node.status.port = httpPort;
+	} else {
 		// Attach HTTP server info to node services
 		Object.assign(node, {
 			httpServer: httpServerInstance.server,

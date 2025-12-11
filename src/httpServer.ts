@@ -4,11 +4,10 @@ import cors from "cors";
 import express, { type Express } from "express";
 import type { Helia } from "helia";
 import { WebSocketServer } from "ws";
-// Debug DB helper
-import { getInstance as getDebugDB } from "@/p2p/orbitdb/stores/debug/setup";
 import type { NodeStatus } from "@/types";
 import { log, setBroadcastFn } from "./lib/log";
 // Route registration functions
+import { registerArticleRoutes } from "./routes/route-articles";
 import { registerFederatedArticleRoutes } from "./routes/route-articles-federated";
 import { registerLocalArticleRoutes } from "./routes/route-articles-local";
 import { registerDashboardRoutes } from "./routes/route-dashboard";
@@ -63,6 +62,7 @@ export function createHttpServer(
 	registerDebugLogRoutes(app);
 	registerStatusRoutes?.(app);
 	registerSourceRoutes?.(app);
+	registerArticleRoutes?.(app);
 	registerLocalArticleRoutes?.(app);
 	registerFederatedArticleRoutes?.(app);
 	registerDashboardRoutes?.(app);
