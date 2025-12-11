@@ -29,7 +29,17 @@ export function setBroadcastFn(fn: (ev: any) => void) {
 }
 
 /**
- * Stub function: addDebugLog now just logs to console and optionally broadcasts
+ * Allows us to broadcast an event 
+ * @param event 
+ */
+export function broadcast(event: any) {
+  try {
+    if (broadcastFn) broadcastFn(event);
+  } catch {}
+}
+
+/**
+ * addDebugLog now just logs to console and optionally broadcasts
  */
 export async function addDebugLog(
 	entry: {

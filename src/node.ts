@@ -8,16 +8,26 @@ import {
 	type KeyStoreType,
 	type OrbitDB,
 } from "@orbitdb/core";
-import { LevelBlockstore } from "blockstore-level";
+// import { LevelBlockstore } from "blockstore-level";
 import type { Helia } from "helia";
 import { createHelia } from "helia";
 import type { Libp2p } from "libp2p";
 import { log } from "@/lib/log";
 import { updateStatus } from "@/lib/status";
 // import { cleanLockFiles } from "@/lib/utils";
-import { createEmptyNodeStatus, type NodeConfig, type NodeStatus } from "@/types";
-import { type ArticleAnalyzedDB, setupArticleAnalyzedDB } from "./db-articles-analyzed";
-import { type ArticleFederatedDB, setupArticleFederatedDB } from "./db-articles-federated";
+import {
+	createEmptyNodeStatus,
+	type NodeConfig,
+	type NodeStatus,
+} from "@/types";
+import {
+	type ArticleAnalyzedDB,
+	setupArticleAnalyzedDB,
+} from "./db-articles-analyzed";
+import {
+	type ArticleFederatedDB,
+	setupArticleFederatedDB,
+} from "./db-articles-federated";
 import { type ArticleLocalDB, setupArticleLocalDB } from "./db-articles-local";
 import { type DebugDB, setupDebugDB } from "./db-debug";
 import { getOrbitDBIdentity } from "./identity";
@@ -87,14 +97,18 @@ export async function getP2PNode(config?: NodeConfig): Promise<NodeInstance> {
 		throw new Error("[Node] Unable to load node NodeConfig.");
 	}
 
-	[nodeConfig.orbitDBKeystorePath, nodeConfig.orbitDBPath, nodeConfig.blockstorePath].forEach(
-		(dir) => {
-			if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-		},
-	);
+	[
+		nodeConfig.orbitDBKeystorePath,
+		nodeConfig.orbitDBPath,
+		nodeConfig.blockstorePath,
+	].forEach((dir) => {
+		if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+	});
 	console.log("✅ Verified storage directories exist");
 
-	console.log(`[Node] Starting p2p node with config: ${JSON.stringify(nodeConfig, null, 2)}`);
+	console.log(
+		`[Node] Starting p2p node with config: ${JSON.stringify(nodeConfig, null, 2)}`,
+	);
 
 	// Ensure directories exist
 	[nodeConfig.orbitDBKeystorePath, nodeConfig.orbitDBPath].forEach((dir) => {
@@ -106,7 +120,10 @@ export async function getP2PNode(config?: NodeConfig): Promise<NodeInstance> {
 	log("Starting P2P node...");
 
 	// --- Libp2p ---
-	const libp2p = await createLibp2pNode(nodeConfig.libp2pListenAddr, nodeConfig.relayAddresses);
+	const libp2p = await createLibp2pNode(
+		nodeConfig.libp2pListenAddr,
+		nodeConfig.relayAddresses,
+	);
 
 	// Libp2p Connected Status
 	status.connected = true;
@@ -124,7 +141,8 @@ export async function getP2PNode(config?: NodeConfig): Promise<NodeInstance> {
 	await helia.start();
 
 	// --- OrbitDB ---
-	const identityId = nodeConfig?.identityId?.toString() || "nous-node-standalone";
+	const identityId =
+		nodeConfig?.identityId?.toString() || "nous-node-standalone";
 	const { identity, identities, keystore } = await getOrbitDBIdentity({
 		identityId,
 		helia,
@@ -145,7 +163,11 @@ export async function getP2PNode(config?: NodeConfig): Promise<NodeInstance> {
 		// --- Setup DBs ---
 		// Pass configured HTTP port through so the debug DB startup entry
 		// can include the actual server port instead of relying on env var.
-		debugDB = await setupDebugDB(orbitdb, nodeConfig.orbitDBPath, nodeConfig?.httpPort);
+		debugDB = await setupDebugDB(
+			orbitdb,
+			nodeConfig.orbitDBPath,
+			nodeConfig?.httpPort,
+		);
 
 		await new Promise((res) => setTimeout(res, 10));
 
@@ -153,7 +175,10 @@ export async function getP2PNode(config?: NodeConfig): Promise<NodeInstance> {
 
 		await new Promise((res) => setTimeout(res, 10));
 
-		articleAnalyzedDB = await setupArticleAnalyzedDB(orbitdb, nodeConfig.orbitDBPath);
+		articleAnalyzedDB = await setupArticleAnalyzedDB(
+			orbitdb,
+			nodeConfig.orbitDBPath,
+		);
 
 		await new Promise((res) => setTimeout(res, 10));
 
@@ -161,7 +186,10 @@ export async function getP2PNode(config?: NodeConfig): Promise<NodeInstance> {
 
 		status.orbitConnected = true;
 	} catch (err: any) {
-		log(`Critical error initializing OrbitDB databases: ${err.message}`, "error");
+		log(
+			`Critical error initializing OrbitDB databases: ${err.message}`,
+			"error",
+		);
 
 		status.orbitConnected = false;
 		throw new Error("Failed to initialize databases. Node cannot start.");

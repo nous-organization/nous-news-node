@@ -128,6 +128,7 @@ export async function startP2PNode(config: NodeConfig): Promise<NodeInstance> {
 		status: nodeStatus,
 		orbitdbConnected: Boolean(orbitdb),
 		httpPort,
+		port: httpPort,
 		helia,
 		orbitdb,
 
@@ -152,6 +153,7 @@ export async function startP2PNode(config: NodeConfig): Promise<NodeInstance> {
 	);
 
 	status.running = true;
+	status.port = httpPort;
 
 	// --- Graceful shutdown ---
 	const runningInstance = {
@@ -195,9 +197,6 @@ export async function startP2PNode(config: NodeConfig): Promise<NodeInstance> {
 
 	console.log("Current status:", status);
 
-	// Register process signals once
-	registerShutdownHandlers();
-
 	return runningInstance;
 }
 
@@ -211,6 +210,9 @@ const config: NodeConfig = {
 	orbitDBPath: ORBITDB_DB_PATH,
 	blockstorePath: BLOCKSTORE_PATH,
 };
+
+// Register process signals once, at the start of the application.
+registerShutdownHandlers();
 
 startP2PNode(config).catch((err) => {
 	console.error("Failed to start P2P node:", err);

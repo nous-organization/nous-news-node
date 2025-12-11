@@ -6,6 +6,7 @@ package-lock.json
 package.json.md5
 .nous
 .models
+node_modules/
 
 # ---------------------------
 # Build output
@@ -19,6 +20,7 @@ build/*
 *.app
 bin/
 .node-cache
+
 
 # ---------------------------
 # OrbitDB / Helia

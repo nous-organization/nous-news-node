@@ -31,7 +31,7 @@ export function registerStatusRoutes(app: Express) {
 				modelsPrefetched: false,
 				orbitConnected: false,
 				peers: [],
-				port: 9001,
+				port: 9001, // http port
 				logs: [],
 				...persisted,
 				lastSync: persisted?.lastSync ?? null,

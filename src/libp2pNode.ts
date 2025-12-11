@@ -1,15 +1,19 @@
 import { noise } from "@chainsafe/libp2p-noise";
 import { yamux } from "@chainsafe/libp2p-yamux";
-import { circuitRelayServer, circuitRelayTransport } from "@libp2p/circuit-relay-v2";
+import {
+	circuitRelayServer,
+	circuitRelayTransport,
+} from "@libp2p/circuit-relay-v2";
 import { gossipsub } from "@libp2p/gossipsub";
 import { identify, identifyPush } from "@libp2p/identify";
-import { mdns } from "@libp2p/mdns";
+// import { mdns } from "@libp2p/mdns";
 import { tcp } from "@libp2p/tcp";
-import { webRTC } from "@libp2p/webrtc";
-import { webTransport } from "@libp2p/webtransport";
+// import { webRTC } from "@libp2p/webrtc";
+// import { webTransport } from "@libp2p/webtransport";
 import { type Multiaddr, multiaddr } from "@multiformats/multiaddr";
 import { createLibp2p, type Libp2p } from "libp2p";
 import { addDebugLog, log } from "@/lib/log";
+import { getExistingLibp2pNode } from "./libp2pInstance";
 // import { kadDHT } from '@libp2p/kad-dht'
 
 /**
@@ -28,6 +32,13 @@ export async function createLibp2pNode(
 ): Promise<Libp2p> {
 	let libp2p: Libp2p;
 	try {
+		const existing = getExistingLibp2pNode();
+
+		if (existing) {
+			console.warn("♻️ Reusing existing Libp2p node (hot reload)");
+			return existing;
+		}
+
 		const options = {
 			// peerDiscovery: [mdns()],
 			addresses: {
@@ -56,7 +67,8 @@ export async function createLibp2pNode(
 		};
 		libp2p = await createLibp2p(options);
 	} catch (err) {
-		throw new Error("Error creating libP2P node");
+		console.error("🔻 LIBP2P CREATION ERROR:", err);
+		throw new Error(`Error creating libP2P node: ${(err as Error).message}`);
 	}
 
 	// Log listening addresses (forEach callback should not return a value)
@@ -89,7 +101,9 @@ export async function createLibp2pNode(
 					// type: "p2p",
 				});
 			} catch (err) {
-				log(`[P2P] Failed to connect to relay ${addr}: ${(err as Error).message}`);
+				log(
+					`[P2P] Failed to connect to relay ${addr}: ${(err as Error).message}`,
+				);
 				addDebugLog({
 					message: `Failed to connect to relay ${addr}: ${(err as Error).message}`,
 					level: "info",
