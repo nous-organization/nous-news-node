@@ -1,165 +1,120 @@
-// frontend/server/src/shutdown.ts
 import { log } from "@/lib/log";
 import { deleteStatus } from "@/lib/status";
 import { cleanLockFiles } from "@/lib/utils";
-import { getRunningInstance } from "./node";
-import type { P2PDatabases } from "./setup";
+import { getInstance as getAnalyzedDB } from "@/p2p/orbitdb/stores/articles/analyzed/setup";
+import { getInstance as getFederatedDB } from "@/p2p/orbitdb/stores/articles/federated/setup";
+import { getInstance as getLocalDB } from "@/p2p/orbitdb/stores/articles/local/setup";
+// Import DB singletons
+import { getInstance as getDebugDB } from "@/p2p/orbitdb/stores/debug/setup";
+import { getNodeServices, type NodeServices } from "./p2p/node";
+import { BLOCKSTORE_PATH } from "./setup";
 
-let shuttingDown = false;
-
+/**
+ * Small helper for async delays
+ */
 function sleep(ms: number) {
 	return new Promise((r) => setTimeout(r, ms));
 }
 
 /**
- * Closes all OrbitDB stores safely, with a small async delay
- * between each close to prevent LevelDB race conditions.
+ * Close all OrbitDB stores safely
  */
-export async function closeDatabases(databases: P2PDatabases) {
-	if (!databases) return;
-
+export async function closeDatabases() {
 	// --- Debug DB ---
-	if (databases.debugDB?.db) {
-		try {
-			await databases.debugDB.db.close();
-			log("✅ Debug DB closed successfully");
-		} catch (err: any) {
-			log(`⚠️ Debug DB close warning: ${err.message}`);
+	try {
+		const debugDB = getDebugDB();
+		if (debugDB?.db) {
+			await debugDB.db.close();
+			log("✅ Debug DB closed");
 		}
-	} else {
-		log("ℹ️  Debug DB not initialized or already null");
+	} catch (err: any) {
+		log(`⚠️ Debug DB close warning: ${err.message}`);
 	}
-
 	await sleep(10);
 
-	// --- Sources DB ---
-	if (databases.articleLocalDB?.articleLocalDB) {
-		try {
-			await databases.articleLocalDB.articleLocalDB.close();
-			log("✅ Sources DB closed successfully");
-		} catch (err: any) {
-			log(`⚠️ Sources DB close warning: ${err.message}`);
+	// --- Local Articles DB ---
+	try {
+		const localDB = getLocalDB();
+		if (localDB?.db) {
+			await localDB.db.close();
+			log("✅ Local Articles DB closed");
 		}
-	} else {
-		log("ℹ️  Local Articles DB not initialized or already null");
+	} catch (err: any) {
+		log(`⚠️ Local Articles DB close warning: ${err.message}`);
 	}
-
 	await sleep(10);
 
-	// --- Analyzed DB ---
-	if (databases.articleAnalyzedDB?.articleAnalyzedDB) {
-		try {
-			await databases.articleAnalyzedDB.articleAnalyzedDB.close();
-			log("✅ Analyzed DB closed successfully");
-		} catch (err: any) {
-			log(`⚠️ Analyzed DB close warning: ${err.message}`);
+	// --- Analyzed Articles DB ---
+	try {
+		const analyzedDB = getAnalyzedDB();
+		if (analyzedDB?.db) {
+			await analyzedDB.db.close();
+			log("✅ Analyzed Articles DB closed");
 		}
-	} else {
-		log("ℹ️  Analyzed Articles DB not initialized or already null");
+	} catch (err: any) {
+		log(`⚠️ Analyzed Articles DB close warning: ${err.message}`);
 	}
-
 	await sleep(10);
 
-	// --- Federated DB (in-memory) ---
-	log("ℹ️  Federated Articles DB is in-memory; no close required");
+	// --- Federated Articles DB ---
+	try {
+		const federatedDB = getFederatedDB();
+		if (federatedDB?.db) {
+			await federatedDB.db.close();
+			log("✅ Federated Articles DB closed");
+		} else {
+			log("ℹ️ Federated Articles DB is in-memory; no close required");
+		}
+	} catch (err: any) {
+		log(`⚠️ Federated Articles DB close warning: ${err.message}`);
+	}
 }
 
 /**
- * Gracefully shuts down the P2P node and all associated services.
- *
- * Performs the following in sequence with individual error handling:
- * 1. Stops the Libp2p networking node
- * 2. Stops OrbitDB instance
- * 3. Stops Helia (IPFS) instance
- * 4. Closes all database instances using `closeDatabases`
- * 5. Cleans lock files for keystore and database directories
- * 6. Deletes persisted node status file
- * 7. Logs the result and exits process
+ * Gracefully shuts down the P2P node and all services
  */
 export async function shutdownP2PNode() {
-	if (shuttingDown) {
-		log("🔁 Shutdown already in progress, ignoring duplicate request");
-		return;
-	}
-	shuttingDown = true;
+	const node: NodeServices = getNodeServices();
 
-	const runningInstance = getRunningInstance();
-
-	if (!runningInstance) {
-		log("ℹ️ No running instance to shut down");
+	if (!node) {
+		log("ℹ️ No running node instance to shut down");
 		process.exit(0);
 		return;
 	}
 
-	const {
-		keystore,
-		libp2p,
-		helia,
-		orbitdb,
-		debugDB,
-		articleLocalDB,
-		articleAnalyzedDB,
-		articleFederatedDB,
-		// httpServer,
-		shutdownHttpServer,
-		orbitDBKeystorePath,
-		orbitDBPath,
-		blockstorePath,
-	} = runningInstance;
-
 	log("🔻 Starting P2P node shutdown...");
 
-	// Close all databases
-	log("🔹 Closing individual databases before stopping OrbitDB...");
-	if (debugDB || articleLocalDB || articleAnalyzedDB || articleFederatedDB) {
-		try {
-			const databases = {
-				debugDB,
-				articleLocalDB,
-				articleAnalyzedDB,
-				articleFederatedDB,
-			} as P2PDatabases;
-			await closeDatabases(databases);
-			// small pause to allow underlying writes to flush
-			await sleep(150);
-		} catch (err: any) {
-			log(`❌ Error closing databases: ${err.message}`);
-		}
+	// Close all DBs
+	try {
+		await closeDatabases();
+		await sleep(150);
+	} catch (err: any) {
+		log(`❌ Error closing databases: ${err.message}`);
 	}
 
-	// Close OrbitDB identities / keystore safely
-	// Stop OrbitDB
+	// Stop OrbitDB core
 	try {
-		if (orbitdb) {
-			await orbitdb.keystore.close();
-			await orbitdb.stop();
-			await orbitdb.ipfs.stop();
+		if (node.orbitdbCore?.orbitdb) {
+			await node.orbitdbCore.keystore.close();
+			await node.orbitdbCore.orbitdb.stop();
+			await node.orbitdbCore.orbitdb.ipfs.stop();
+			log("✅ OrbitDB stopped");
 		}
-		log("✅ OrbitDB stopped");
 	} catch (err: any) {
 		log(`❌ Error stopping OrbitDB: ${err.message}`);
 	}
 
-	try {
-		if (keystore?.close) {
-			await keystore.close();
-			log("✅ Keystore closed");
-		}
-	} catch (err: any) {
-		log(`⚠️ Error closing identity/keystore: ${err.message}`);
-	}
-
 	// Stop Helia
 	try {
-		if (helia) await helia.stop();
+		if (node.helia) await node.helia.stop();
 		log("✅ Helia stopped");
 	} catch (err: any) {
 		log(`❌ Error stopping Helia: ${err.message}`);
 	}
 
-	// Stop networking
+	// Stop Libp2p
 	try {
-		await libp2p.stop();
+		await node.libp2p.stop();
 		log("✅ Libp2p stopped");
 	} catch (err: any) {
 		log(`❌ Error stopping Libp2p: ${err.message}`);
@@ -173,11 +128,11 @@ export async function shutdownP2PNode() {
 		log(`❌ Error deleting status: ${err.message}`);
 	}
 
-	// Stop HTTP server first
-	if (shutdownHttpServer) {
+	// Shutdown HTTP server
+	if (node.shutdownHttpServer) {
 		try {
-			await shutdownHttpServer();
-			log("✅ Server shutdown complete");
+			await node.shutdownHttpServer();
+			log("✅ HTTP server shutdown complete");
 		} catch (err: any) {
 			log(`❌ Error shutting down HTTP server: ${err.message}`);
 		}
@@ -185,9 +140,11 @@ export async function shutdownP2PNode() {
 
 	// Clean lock files
 	try {
-		await cleanLockFiles(orbitDBKeystorePath);
-		await cleanLockFiles(orbitDBPath);
-		await cleanLockFiles(blockstorePath);
+		const { orbitDBKeystorePath, orbitDBPath } = node.orbitdbCore || {};
+		if (orbitDBKeystorePath) await cleanLockFiles(orbitDBKeystorePath);
+		if (orbitDBPath) await cleanLockFiles(orbitDBPath);
+		//
+		if (BLOCKSTORE_PATH) await cleanLockFiles(BLOCKSTORE_PATH);
 		log("✅ Lock files cleaned");
 	} catch (err: any) {
 		log(`❌ Error cleaning lock files: ${err.message}`);
@@ -198,12 +155,7 @@ export async function shutdownP2PNode() {
 }
 
 /**
- * Registers process signal handlers to trigger graceful shutdown.
- * Handles:
- * - SIGINT (Ctrl+C)
- * - SIGTERM
- * - uncaughtException
- * - process exit
+ * Register shutdown signal handlers
  */
 export function registerShutdownHandlers() {
 	process.on("SIGINT", shutdownP2PNode);

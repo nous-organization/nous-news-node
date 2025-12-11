@@ -1,21 +1,25 @@
+/**
+ * @file route-local-articles.ts
+ * @description
+ * Express routes for managing local articles in OrbitDB / Helia.
+ * Supports fetching, saving, translating, refetching, and deleting articles.
+ */
+
 import type { Express, NextFunction, Request, Response } from "express";
-import type { ArticleAnalyzedDB } from "@/db-articles-analyzed";
-import type { ArticleLocalDB } from "@/db-articles-local";
-import type { BaseServerContext } from "@/httpServer";
 import { analyzeArticle } from "@/lib/ai";
 import { translateMultipleTitlesAI } from "@/lib/ai/translate";
 import { addDebugLog, log } from "@/lib/log";
-import type { ApiResponse, Article, ArticleAnalyzed, Source } from "@/types";
+import {
+	add as addArticle,
+	addUnique as addUniqueLocalArticles,
+	deleteByUrl,
+	fetchAllLocalSources,
+	getAll as getAllLocalArticles,
+	getByIdentifier,
+	getFullArticle,
+} from "@/p2p/orbitdb/stores/articles/local";
+import type { Article, ArticleAnalyzed, Source } from "@/types";
 import { handleError } from "./helpers";
-
-/**
- * Combined handlers for local article routes.
- * Extends the DB interface to optionally include Helia instance.
- */
-export type LocalArticleHandlers = ArticleLocalDB &
-	BaseServerContext & {
-		saveAnalyzedArticle: ArticleAnalyzedDB["saveAnalyzedArticle"];
-	};
 
 /**
  * Simple in-memory throttle map to limit requests per IP
@@ -27,7 +31,11 @@ const TIME_WINDOW = 1000 * 5; // 5 seconds
 /**
  * Express middleware to throttle requests per IP
  */
-export const throttleMiddleware = (req: Request, res: Response, next: NextFunction) => {
+export const throttleMiddleware = (
+	req: Request,
+	res: Response,
+	next: NextFunction,
+) => {
 	const clientIP = req.ip || req.socket.remoteAddress || "unknown";
 	const now = Date.now();
 	const throttle = throttleMap.get(clientIP) || { count: 0, lastRequest: now };
@@ -47,65 +55,48 @@ export const throttleMiddleware = (req: Request, res: Response, next: NextFuncti
 
 /**
  * POST /articles/local/translate
- *
- * Handler to translate specified fields of local articles to a target language.
- *
- * @param req - Express request
- *   - `req.body.urls`: string[] of article URLs or IDs to translate
- *   - `req.body.targetLanguage`: target language code (e.g., "en", "ko")
- *   - `req.body.keys`: optional array of Article keys to translate (default ["title"])
- *   - `req.body.overwrite`: optional boolean, whether to overwrite existing translations
- *   - `req.query.overwrite`: optional query param to override overwrite flag
- * @param handlers - Functions to get and save local articles:
- *   - `getLocalArticle(urlOrId: string): Promise<Article | null>` - fetches a local article
- *   - `saveLocalArticle(article: Article, overwrite?: boolean): Promise<void>` - saves updated article
- * @returns Promise resolving to an `ApiResponse<Article[]>` containing updated articles
+ * Translate specified fields of local articles to a target language
  */
-export const translateArticleHandler = async (
-	req: Request,
-	res: Response,
-	handlers: LocalArticleHandlers,
-): Promise<void> => {
-	// <- note we no longer return ApiResponse, we handle response inside
-	const { helia, getLocalArticle, saveLocalArticle } = handlers;
-
-	if (!getLocalArticle || !saveLocalArticle) {
-		await handleError(res, "Required DB functions not provided", 500, "error");
-		return;
-	}
-
-	const { identifiers, targetLanguage, keys = ["title"], overwrite: bodyOverwrite } = req.body;
+export const translateArticleHandler = async (req: Request, res: Response) => {
+	const {
+		identifiers,
+		targetLanguage,
+		keys = ["title"],
+		overwrite: bodyOverwrite,
+	} = req.body;
 	const queryOverwrite = req.query?.overwrite === "true";
 	const overwrite = queryOverwrite || bodyOverwrite === true;
 
-	if (!Array.isArray(identifiers) || !targetLanguage || !Array.isArray(keys) || keys.length === 0) {
-		await handleError(res, "Missing ID, targetLanguage, or keys", 404, "error");
-		return;
+	if (!Array.isArray(identifiers) || !targetLanguage || keys.length === 0) {
+		return handleError(
+			res,
+			"Missing identifiers, targetLanguage, or keys",
+			400,
+			"error",
+		);
 	}
 
 	const updatedArticles: Article[] = [];
 
 	for (const id of identifiers) {
 		try {
-			const article = await getLocalArticle(id);
+			const article = await getByIdentifier(id);
 			if (!article) continue;
 
 			for (const key of keys) {
 				const originalText = article[key as keyof Article] as unknown;
 				if (typeof originalText !== "string") continue;
 
-				const translated = await translateMultipleTitlesAI([originalText], targetLanguage);
-
-				const translatedText = translated?.[0];
-				if (translatedText) {
-					(article as any)[key] = translatedText;
-				}
+				const translated = await translateMultipleTitlesAI(
+					[originalText],
+					targetLanguage,
+				);
+				if (translated?.[0]) (article as any)[key] = translated[0];
 			}
 
-			await saveLocalArticle(article, helia, overwrite);
+			await addArticle(article, overwrite);
 			updatedArticles.push(article);
 		} catch (err) {
-			console.error(`Failed to translate article ${id}:`, err);
 			await handleError(
 				res,
 				`Failed to translate article ${id}: ${(err as Error).message}`,
@@ -116,37 +107,39 @@ export const translateArticleHandler = async (
 		}
 	}
 
+	await addDebugLog({
+		message: `Translated ${updatedArticles.length} articles`,
+		level: "info",
+		meta: { identifiers, targetLanguage },
+	});
+
 	res.json({ success: true, data: updatedArticles });
 };
 
 /**
  * POST /articles/local/fetch
- *
- * Starts a background fetch of articles.
+ * Starts a background fetch of articles from sources
  */
 export const fetchLocalArticlesHandler = async (
 	req: Request,
 	res: Response,
-	handlers: LocalArticleHandlers,
 ) => {
-	const { fetchAllLocalSources, addUniqueLocalArticles } = handlers;
-
-	if (!fetchAllLocalSources || !addUniqueLocalArticles) {
-		await handleError(res, "Required DB functions not provided", 500, "error");
-		return;
-	}
-
-	const sources: Source[] = Array.isArray(req.body?.sources) ? req.body.sources : [];
+	const sources: Source[] = Array.isArray(req.body?.sources)
+		? req.body.sources
+		: [];
 	const since = req.body?.since ? new Date(req.body.since) : undefined;
 
-	// Fire-and-forget background fetch
+	// Fire-and-forget
 	(async () => {
 		try {
-			const { articles, errors } = await fetchAllLocalSources(sources, "en", since);
-
+			const { articles, errors } = await fetchAllLocalSources(
+				sources,
+				"en",
+				since,
+			);
 			const addedCount = await addUniqueLocalArticles(articles);
 
-			if (errors && addDebugLog) {
+			if (errors) {
 				log(`fetchAllSources errors: ${JSON.stringify(errors)}`, "error");
 				await addDebugLog({
 					message: "fetchAllSources encountered errors",
@@ -155,23 +148,19 @@ export const fetchLocalArticlesHandler = async (
 				});
 			}
 
-			if (addDebugLog) {
-				await addDebugLog({
-					message: `Background fetch completed: ${addedCount} new articles`,
-					level: "info",
-					meta: { sources: sources.map((s) => s.name) ?? 0 },
-				});
-			}
+			await addDebugLog({
+				message: `Background fetch completed: ${addedCount} new articles`,
+				level: "info",
+				meta: { sources: sources.map((s) => s.name) ?? [] },
+			});
 		} catch (err) {
-			const message = (err as Error).message || "Unknown error fetching articles";
+			const message =
+				(err as Error).message || "Unknown error fetching articles";
 			log(`Background fetch error: ${message}`, "error");
-
-			if (addDebugLog) {
-				await addDebugLog({
-					message: `Background fetch failed: ${message}`,
-					level: "error",
-				});
-			}
+			await addDebugLog({
+				message: `Background fetch failed: ${message}`,
+				level: "error",
+			});
 		}
 	})();
 
@@ -179,135 +168,71 @@ export const fetchLocalArticlesHandler = async (
 };
 
 /**
- * GET /api/article/aggregated/:id
- * Fetch aggregated article with full analysis
- */
-// export const getAggregatedArticleHandler = async (
-// 	req: Request,
-// 	res: Response,
-// 	handlers: LocalArticleHandlers,
-// ) => {
-// 	const { getAllLocalArticles } = handlers;
-
-// 	res.setHeader("Content-Type", "application/json");
-
-// 	if (!getAllLocalArticles) {
-// 		return handleError(res, "getAllLocalArticles function not provided", 500, "error");
-// 	}
-
-// 	try {
-// 		const storyId = req.params.id;
-// 		if (!storyId) {
-// 			return handleError(res, "No story ID provided", 400, "warn");
-// 		}
-
-// 		const allArticles = await getAllLocalArticles();
-
-// 		// Aggregate articles for the same story
-// 		const related = allArticles.filter((a) => a.storyId === storyId);
-
-// 		if (related.length === 0) {
-// 			return handleError(res, `No articles found for story: ${storyId}`, 404, "warn");
-// 		}
-
-// 		// Combine content
-// 		const combinedContent = related
-// 			.map((a) => a.content)
-// 			.filter(Boolean)
-// 			.join("\n\n");
-
-// 		// TODO: Run analysis (political bias, cognitive bias, summary, bullet points)
-// 		const analyzed = await analyzeContent(combinedContent, related);
-
-// 		res.json(analyzed);
-// 	} catch (err) {
-// 		return handleError(
-// 			res,
-// 			`Error fetching aggregated article: ${(err as Error).message}`,
-// 			500,
-// 			"error",
-// 		);
-// 	}
-// };
-
-/**
  * GET /articles/local
- * Returns all articles from the local article DB, throttled per IP
+ * Returns all local articles
  */
 export const getAllLocalArticlesHandler = async (
 	req: Request,
 	res: Response,
-	handlers: LocalArticleHandlers,
 ) => {
-	const { getAllLocalArticles } = handlers;
-
-	if (!getAllLocalArticles) {
-		await handleError(res, "getAllLocalArticles function not provided", 500, "error");
-		return;
-	}
-
 	try {
-		const allArticles = await getAllLocalArticles();
+		const articles = await getAllLocalArticles();
 
-		if (addDebugLog) {
-			await addDebugLog({
-				message: `Fetched ${allArticles.length} articles for ${req.ip?.toString()}`,
-				level: "info",
-			});
-		}
+		await addDebugLog({
+			message: `Fetched ${articles.length} articles for ${req.ip?.toString()}`,
+			level: "info",
+		});
 
-		res.json(allArticles);
+		res.json(articles);
 	} catch (err) {
 		const message = (err as Error).message || "Unknown error fetching articles";
-		await handleError(res, `Error fetching articles for ${req.ip}: ${message}`, 500, "error");
+		await handleError(res, `Error fetching articles: ${message}`, 500, "error");
 	}
 };
 
 /**
  * GET /articles/local/full
- * Fetch a single local article by ID, CID, or URL
+ * Fetch a single local article with full content and analysis
  */
 export const getFullLocalArticleHandler = async (
 	req: Request,
 	res: Response,
-	handlers: LocalArticleHandlers,
 ) => {
-	const { saveAnalyzedArticle, getLocalArticle, getFullLocalArticle, helia } = handlers;
-
-	if (!getLocalArticle) return handleError(res, "getLocalArticle not provided", 500, "error");
-	if (!getFullLocalArticle)
-		return handleError(res, "getFullLocalArticle not provided", 500, "error");
-	if (!helia) return handleError(res, "Helia node not provided", 500, "error");
-
 	try {
 		const lookupKey = req.query.id || req.query.cid || req.query.url;
-		if (!lookupKey) return handleError(res, "No article ID, CID, or URL provided", 400, "warn");
+		if (!lookupKey)
+			return handleError(
+				res,
+				"No article ID, CID, or URL provided",
+				400,
+				"warn",
+			);
 
-		const article = await getLocalArticle(lookupKey as string);
-		if (!article) return handleError(res, `Article not found for ${lookupKey}`, 404, "warn");
+		const article = await getByIdentifier(lookupKey as string);
+		if (!article)
+			return handleError(
+				res,
+				`Article not found for ${lookupKey}`,
+				404,
+				"warn",
+			);
 
-		const fullArticle = await getFullLocalArticle(article, helia);
+		const fullArticle = await getFullArticle(article);
 
 		let analyzedArticle: ArticleAnalyzed | null = null;
 		if (!fullArticle.analyzed && analyzeArticle) {
 			analyzedArticle = await analyzeArticle(fullArticle);
+			analyzedArticle = {
+				...analyzedArticle,
+				id: crypto.randomUUID(),
+				originalId: fullArticle.id,
+				url: fullArticle.url,
+				title: fullArticle.title,
+				analyzed: true,
+			};
 		}
 
-		console.log("analyzedArticle", analyzedArticle);
-
-		// assign new ID and reference to original
-		analyzedArticle = {
-			...analyzedArticle,
-			id: crypto.randomUUID(),
-			originalId: fullArticle.id,
-			url: fullArticle.url,
-			title: fullArticle.title,
-			analyzed: true,
-		};
-
-		await saveAnalyzedArticle(analyzedArticle);
-
-		res.json(analyzedArticle);
+		res.json(analyzedArticle ?? fullArticle);
 	} catch (err) {
 		const message = (err as Error).message;
 		await handleError(res, `Error fetching article: ${message}`, 500, "error");
@@ -316,26 +241,22 @@ export const getFullLocalArticleHandler = async (
 
 /**
  * POST /articles/local/save
- * Save a single new source article, optionally overwriting existing
+ * Save a single article
  */
-export const saveLocalArticleHandler = async (
-	req: Request,
-	res: Response,
-	handlers: LocalArticleHandlers,
-) => {
-	const { helia, saveLocalArticle } = handlers;
-
-	if (!saveLocalArticle) return handleError(res, "saveLocalArticle not provided", 500, "error");
+export const saveLocalArticleHandler = async (req: Request, res: Response) => {
 	if (!req.body || !req.body.url || !req.body.title || !req.body.content) {
 		return handleError(res, "Missing required article fields", 400, "warn");
 	}
 
-	// Read overwrite flag from query param or request body
-	const overwrite = req.query.overwrite === "true" || req.body.overwrite === true;
+	const overwrite =
+		req.query.overwrite === "true" || req.body.overwrite === true;
 
 	try {
-		await saveLocalArticle(req.body, helia, overwrite);
-		await addDebugLog({ message: `Saved article: ${req.body.url}`, level: "info" });
+		await addArticle(req.body, overwrite);
+		await addDebugLog({
+			message: `Saved article: ${req.body.url}`,
+			level: "info",
+		});
 		res.json({ success: true, url: req.body.url, overwritten: overwrite });
 	} catch (err) {
 		const message = (err as Error).message;
@@ -350,22 +271,25 @@ export const saveLocalArticleHandler = async (
 export const refetchLocalArticlesHandler = async (
 	req: Request,
 	res: Response,
-	handlers: LocalArticleHandlers,
 ) => {
-	const { addUniqueLocalArticles } = handlers;
-
-	if (!addUniqueLocalArticles)
-		return handleError(res, "addUniqueLocalArticles not provided", 500, "error");
-	if (!req.body || !Array.isArray(req.body))
+	if (!Array.isArray(req.body))
 		return handleError(res, "Expected an array of articles", 400, "warn");
 
 	try {
 		const addedCount = await addUniqueLocalArticles(req.body);
-		await addDebugLog({ message: `Refetched ${addedCount} unique articles`, level: "info" });
+		await addDebugLog({
+			message: `Refetched ${addedCount} unique articles`,
+			level: "info",
+		});
 		res.json({ success: true, added: addedCount });
 	} catch (err) {
 		const message = (err as Error).message;
-		await handleError(res, `Error refetching articles: ${message}`, 500, "error");
+		await handleError(
+			res,
+			`Error refetching articles: ${message}`,
+			500,
+			"error",
+		);
 	}
 };
 
@@ -376,18 +300,17 @@ export const refetchLocalArticlesHandler = async (
 export const deleteLocalArticleHandler = async (
 	req: Request,
 	res: Response,
-	handlers: LocalArticleHandlers,
 ) => {
-	const { deleteLocalArticle } = handlers;
-
-	if (!deleteLocalArticle) return handleError(res, "deleteLocalArticle not provided", 500, "error");
+	const articleUrl = decodeURIComponent(req.params.url);
+	if (!articleUrl)
+		return handleError(res, "No article URL provided", 400, "warn");
 
 	try {
-		const articleUrl = decodeURIComponent(req.params.url);
-		if (!articleUrl) return handleError(res, "No article URL provided", 400, "warn");
-
-		await deleteLocalArticle(articleUrl);
-		await addDebugLog({ message: `Deleted article: ${articleUrl}`, level: "info" });
+		await deleteByUrl(articleUrl);
+		await addDebugLog({
+			message: `Deleted article: ${articleUrl}`,
+			level: "info",
+		});
 		res.json({ success: true, url: articleUrl });
 	} catch (err) {
 		const message = (err as Error).message;
@@ -396,22 +319,14 @@ export const deleteLocalArticleHandler = async (
 };
 
 /**
- * Helper: register all local article routes in an Express app
+ * Helper: register all local article routes
  */
-export function registerLocalArticleRoutes(app: Express, handlers: any) {
-	app.post("/articles/local/fetch", (req, res) => fetchLocalArticlesHandler(req, res, handlers));
-	app.get("/articles/local", throttleMiddleware, (req, res) =>
-		getAllLocalArticlesHandler(req, res, handlers),
-	);
-	app.post("/articles/local/translate", (req, res) => {
-		translateArticleHandler(req, res, handlers);
-	});
-	app.get("/articles/local/full", (req, res) => getFullLocalArticleHandler(req, res, handlers));
-	app.post("/articles/local/save", (req, res) => saveLocalArticleHandler(req, res, handlers));
-	app.post("/articles/local/refetch", (req, res) =>
-		refetchLocalArticlesHandler(req, res, handlers),
-	);
-	app.delete("/articles/local/delete/:url", (req, res) =>
-		deleteLocalArticleHandler(req, res, handlers),
-	);
+export function registerLocalArticleRoutes(app: Express) {
+	app.post("/articles/local/fetch", fetchLocalArticlesHandler);
+	app.get("/articles/local", throttleMiddleware, getAllLocalArticlesHandler);
+	app.post("/articles/local/translate", translateArticleHandler);
+	app.get("/articles/local/full", getFullLocalArticleHandler);
+	app.post("/articles/local/save", saveLocalArticleHandler);
+	app.post("/articles/local/refetch", refetchLocalArticlesHandler);
+	app.delete("/articles/local/delete/:url", deleteLocalArticleHandler);
 }

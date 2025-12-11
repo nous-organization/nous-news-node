@@ -6,8 +6,11 @@
  */
 
 import type { Express, NextFunction, Request, Response } from "express";
-import { log } from "@/lib/log";
-import type { Article } from "@/types";
+import { addDebugLog } from "@/lib/log";
+import {
+	getByIdentifier,
+	getFullArticle,
+} from "@/p2p/orbitdb/stores/articles/local";
 import { handleError } from "./helpers";
 
 /**
@@ -20,7 +23,11 @@ const TIME_WINDOW = 1000 * 5; // 5 seconds
 /**
  * Middleware to throttle requests per IP
  */
-export const throttleMiddleware = (req: Request, res: Response, next: NextFunction) => {
+export const throttleMiddleware = (
+	req: Request,
+	res: Response,
+	next: NextFunction,
+) => {
 	const clientIP = req.ip || req.socket.remoteAddress || "unknown";
 	const now = Date.now();
 	const throttle = throttleMap.get(clientIP) || { count: 0, lastRequest: now };
@@ -48,60 +55,53 @@ export const throttleMiddleware = (req: Request, res: Response, next: NextFuncti
  *
  * Priority: CID → ID → URL
  */
-export const getArticleHandler = async (
-	req: Request,
-	res: Response,
-	handlers?: {
-		getLocalArticle?: (idOrCid: string) => Promise<Article | null>;
-		addDebugLog?: (entry: any) => Promise<void>;
-	},
-) => {
-	const { getLocalArticle, addDebugLog } = handlers || {};
-
-	if (!getLocalArticle) {
-		return handleError(res, "getLocalArticle function not provided", 500, "error");
-	}
-
+export const getArticleHandler = async (req: Request, res: Response) => {
 	try {
 		const { cid, id, url } = req.query as Record<string, string>;
+		const identifier = cid || id || url;
 
-		let article: Article | null = null;
+		if (!identifier) {
+			return handleError(
+				res,
+				"Missing query parameter (cid, id, or url)",
+				400,
+				"warn",
+			);
+		}
 
-		if (cid) article = await getLocalArticle(cid);
-		else if (id) article = await getLocalArticle(id);
-		else if (url) article = await getLocalArticle(url);
-
+		// Fetch article from local OrbitDB
+		const article = await getByIdentifier(identifier);
 		if (!article) {
 			return handleError(res, "Article not found", 404, "warn");
 		}
 
-		if (addDebugLog) {
-			await addDebugLog({
-				_id: crypto.randomUUID(),
-				timestamp: new Date().toISOString(),
-				message: `Fetched article for query: ${JSON.stringify(req.query)}`,
-				level: "info",
-			});
-		}
+		// Ensure full content is loaded
+		const fullArticle = await getFullArticle(article);
 
-		res.status(200).json(article);
+		// Log debug info
+		await addDebugLog({
+			message: `Fetched article for query: ${JSON.stringify(req.query)}`,
+			level: "info",
+			meta: { query: req.query },
+		});
+
+		res.status(200).json(fullArticle);
 	} catch (err) {
 		const msg = (err as Error).message || "Unknown error fetching article";
-		if (addDebugLog) {
-			await addDebugLog({
-				_id: crypto.randomUUID(),
-				timestamp: new Date().toISOString(),
-				message: `Error fetching article: ${msg}`,
-				level: "error",
-			});
-		}
+		await addDebugLog({
+			message: `Error fetching article: ${msg}`,
+			level: "error",
+			meta: { query: req.query },
+		});
 		return handleError(res, msg, 500, "error");
 	}
 };
 
 /**
  * Helper: register all article routes in an Express app
+ *
+ * @param app Express application instance
  */
-export function registerArticleRoutes(app: Express, handlers: any = {}) {
-	app.get("/api/article", throttleMiddleware, (req, res) => getArticleHandler(req, res, handlers));
+export function registerArticleRoutes(app: Express) {
+	app.get("/api/article", throttleMiddleware, getArticleHandler);
 }

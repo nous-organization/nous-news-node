@@ -1,22 +1,13 @@
 /**
  * @file route-article-federated.ts
- * @description Express-compatible route for fetching federated article pointers.
+ * @description Express routes for fetching and managing federated article pointers.
+ * Supports basic throttling and uses external OrbitDB/P2P methods directly.
  */
 
 import type { Express, NextFunction, Request, Response } from "express";
-import type { ArticleFederatedDB } from "@/db-articles-federated";
-import type { BaseServerContext } from "@/httpServer";
+import { getAll as getAllFederatedArticles } from "@/p2p/orbitdb/stores/articles/federated";
 import type { ArticleFederated } from "@/types";
 import { handleError } from "./helpers";
-
-/**
- * Combined handlers for federated article routes
- * Extends the DB interface and adds route-specific helpers
- */
-export type FederatedArticleHandlers = ArticleFederatedDB &
-	BaseServerContext & {
-		// TODO: Add extra props here
-	};
 
 /**
  * Simple in-memory throttle map to limit requests per IP
@@ -28,7 +19,11 @@ const TIME_WINDOW = 1000 * 5; // 5 seconds
 /**
  * Middleware to throttle requests per IP
  */
-export const throttleMiddleware = (req: Request, res: Response, next: NextFunction) => {
+export const throttleMiddleware = (
+	req: Request,
+	res: Response,
+	next: NextFunction,
+) => {
 	const clientIP = req.ip || req.socket.remoteAddress || "unknown";
 	const now = Date.now();
 	const throttle = throttleMap.get(clientIP) || { count: 0, lastRequest: now };
@@ -54,15 +49,9 @@ export const throttleMiddleware = (req: Request, res: Response, next: NextFuncti
 export const fetchFederatedArticlesHandler = async (
 	req: Request,
 	res: Response,
-	handlers?: FederatedArticleHandlers,
 ) => {
-	const { getFederatedArticles } = handlers || {};
-	if (!getFederatedArticles) {
-		return handleError(res, "getFederatedArticles function not provided", 500, "error");
-	}
-
 	try {
-		const articles: ArticleFederated[] = await getFederatedArticles();
+		const articles: ArticleFederated[] = await getAllFederatedArticles();
 		res.status(200).json(articles);
 	} catch (err) {
 		await handleError(
@@ -77,8 +66,10 @@ export const fetchFederatedArticlesHandler = async (
 /**
  * Helper: register federated article routes in an Express app
  */
-export function registerFederatedArticleRoutes(app: Express, handlers: any) {
-	app.get("/articles/federated", throttleMiddleware, (req, res) =>
-		fetchFederatedArticlesHandler(req, res, handlers),
+export function registerFederatedArticleRoutes(app: Express) {
+	app.get(
+		"/articles/federated",
+		throttleMiddleware,
+		fetchFederatedArticlesHandler,
 	);
 }

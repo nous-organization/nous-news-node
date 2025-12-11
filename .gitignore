@@ -25,10 +25,6 @@ bin/
 # ---------------------------
 # OrbitDB / Helia
 # ---------------------------
-orbitdb/
-orbitdb-keystore/
-orbitdb*/
-orbitdb-keystore*/
 helia-repo/
 data/
 !src/orbitdb

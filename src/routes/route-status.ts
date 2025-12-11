@@ -39,7 +39,12 @@ export function registerStatusRoutes(app: Express) {
 
 			res.status(200).json(status);
 		} catch (err) {
-			await handleError(res, `Failed to load status file: ${(err as Error).message}`, 500, "error");
+			await handleError(
+				res,
+				`Failed to load status file: ${(err as Error).message}`,
+				500,
+				"error",
+			);
 		}
 	});
 
@@ -50,7 +55,12 @@ export function registerStatusRoutes(app: Express) {
 		try {
 			const body = req.body;
 			if (!body || typeof body !== "object") {
-				await handleError(res, "Invalid body, expected JSON object", 400, "warn");
+				await handleError(
+					res,
+					"Invalid body, expected JSON object",
+					400,
+					"warn",
+				);
 				return;
 			}
 

@@ -1,24 +1,28 @@
 // frontend/src/p2p/routes/route-log.ts
 import type { Router } from "express";
 import { log } from "@/lib/log";
+import { getInstance as getDebugDB } from "@/p2p/orbitdb/stores/debug/setup";
 import type { DebugLogEntry } from "@/types/log";
 
 /**
  * Registers debug log routes on an Express router.
  *
- * @param router - Express Router instance
- * @param debugDB - DebugDB instance from setupDebugDB
+ * Uses the singleton OrbitDB debug instance internally.
  */
-export function registerDebugLogRoutes(router: Router, debugDB: any) {
+export function registerDebugLogRoutes(router: Router) {
 	/**
 	 * GET /debug/logs
 	 *
 	 * Returns all debug logs from the OrbitDB debug DB.
 	 */
 	router.get("/debug/logs", async (req, res) => {
-		if (!debugDB?.getAll) {
-			log("❌ Debug DB getAll() not available", "error");
-			return res.status(500).json({ error: "Debug DB getAll() not available" });
+		let debugDB: any;
+		try {
+			debugDB = getDebugDB();
+		} catch (err) {
+			const msg = (err as Error).message || "Debug DB not initialized";
+			log(`❌ ${msg}`, "error");
+			return res.status(500).json({ error: msg });
 		}
 
 		try {
@@ -37,12 +41,17 @@ export function registerDebugLogRoutes(router: Router, debugDB: any) {
 	 * Adds a log entry to the OrbitDB debug DB.
 	 */
 	router.post("/debug/log", async (req, res) => {
-		if (!debugDB?.add) {
-			log("❌ Debug DB add() not available", "error");
-			return res.status(500).json({ error: "Debug DB add() not available" });
+		let debugDB: any;
+		try {
+			debugDB = getDebugDB();
+		} catch (err) {
+			const msg = (err as Error).message || "Debug DB not initialized";
+			log(`❌ ${msg}`, "error");
+			return res.status(500).json({ error: msg });
 		}
 
-		const { _id, timestamp, message, level, meta } = req.body as Partial<DebugLogEntry>;
+		const { _id, timestamp, message, level, meta } =
+			req.body as Partial<DebugLogEntry>;
 
 		if (!message) {
 			return res.status(400).json({ error: "Missing log message" });

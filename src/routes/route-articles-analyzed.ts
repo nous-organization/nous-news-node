@@ -1,53 +1,65 @@
-// src/routes/route-articles-analyzed.ts
+/**
+ * @file route-articles-analyzed.ts
+ * @description Express routes for managing fully analyzed articles.
+ * Routes now use external OrbitDB store methods directly.
+ */
+
 import type { Express, Request, Response } from "express";
-import type { ArticleAnalyzedDB } from "@/db-articles-analyzed";
-import type { BaseServerContext } from "@/httpServer";
+import { analyzeArticle } from "@/lib/ai";
 import { addDebugLog, log } from "@/lib/log";
-import type { ArticleAnalyzed } from "@/types";
+import { getHelia } from "@/p2p/helia";
+import {
+	deleteById,
+	getAll,
+	getById,
+	add as saveAnalyzedArticleStore,
+} from "@/p2p/orbitdb/stores/articles/analyzed";
+import { getFullArticle } from "@/p2p/orbitdb/stores/articles/local/getFullArticle";
+import type { Article, ArticleAnalyzed } from "@/types";
 import { handleError } from "./helpers";
 
 /**
- * Combined handlers for analyzed article routes
- * Extends the DB interface and adds route-specific helpers
+ * Simple in-memory throttle map to limit requests per IP
  */
-export type AnalyzedArticleHandlers = ArticleAnalyzedDB &
-	BaseServerContext & {
-		getLocalArticle?: (identifier: string) => Promise<ArticleAnalyzed | null>;
-		getFullLocalArticle?: (
-			article: ArticleAnalyzed,
-			helia: any,
-		) => Promise<ArticleAnalyzed>;
-		analyzeArticle?: (article: ArticleAnalyzed) => Promise<ArticleAnalyzed>;
-	};
+const throttleMap = new Map<string, { count: number; lastRequest: number }>();
+const THROTTLE_LIMIT = 15;
+const TIME_WINDOW = 1000 * 5;
+
+/**
+ * Middleware to throttle requests per IP
+ */
+export const throttleMiddleware = (
+	req: Request,
+	res: Response,
+	next: () => void,
+) => {
+	const clientIP = req.ip || req.socket.remoteAddress || "unknown";
+	const now = Date.now();
+	const throttle = throttleMap.get(clientIP) || { count: 0, lastRequest: now };
+
+	if (now - throttle.lastRequest > TIME_WINDOW) throttle.count = 0;
+	throttle.count++;
+	throttle.lastRequest = now;
+	throttleMap.set(clientIP, throttle);
+
+	if (throttle.count > THROTTLE_LIMIT) {
+		res.status(429).json({ error: "Too many requests — please slow down." });
+		return;
+	}
+
+	next();
+};
 
 /**
  * GET /articles/analyzed/full
  * Retrieves a fully analyzed article by ID, URL, or IPFS CID.
- * Falls back to local article DB if not already analyzed.
  */
 export const getFullAnalyzedArticleHandler = async (
 	req: Request,
 	res: Response,
-	handlers: AnalyzedArticleHandlers,
 ) => {
-	const {
-		getLocalArticle,
-		getFullLocalArticle,
-		analyzeArticle,
-		helia,
-		getAnalyzedArticle,
-		saveAnalyzedArticle,
-	} = handlers;
-
-	if (!getLocalArticle)
-		return handleError(res, "getLocalArticle not provided", 500, "error");
-	if (!getFullLocalArticle)
-		return handleError(res, "getFullLocalArticle not provided", 500, "error");
-	if (!analyzeArticle)
-		return handleError(res, "analyzeArticle not provided", 500, "error");
+	const helia = getHelia();
 	if (!helia) return handleError(res, "Helia node not provided", 500, "error");
-	if (!getAnalyzedArticle || !saveAnalyzedArticle)
-		return handleError(res, "Analyzed DB not provided", 500, "error");
 
 	try {
 		const lookupKey = req.query.id || req.query.cid || req.query.url;
@@ -59,30 +71,50 @@ export const getFullAnalyzedArticleHandler = async (
 				"warn",
 			);
 
-		const analyzedArticle = await getAnalyzedArticle(lookupKey as string);
+		// Check if already analyzed
+		const analyzedArticle: ArticleAnalyzed | null = await getById(
+			lookupKey as string,
+		);
 		if (analyzedArticle) {
 			log(`Found analyzed article: ${analyzedArticle.id}`);
 			return res.json(analyzedArticle);
 		}
 
-		const article = await getLocalArticle(lookupKey as string);
-		if (!article)
+		// Fetch local article and enrich
+		const localArticle: Article | null = await getFullArticle(
+			{ id: lookupKey as string } as Article,
+			true,
+		);
+
+		if (!localArticle) {
 			return handleError(
 				res,
 				`Article not found for ${lookupKey}`,
 				404,
 				"warn",
 			);
-
-		let fullArticle = await getFullLocalArticle(article, helia);
-
-		if (!fullArticle.analyzed) {
-			fullArticle = await analyzeArticle(fullArticle);
 		}
 
-		await saveAnalyzedArticle(fullArticle);
-		log(`Saved analyzed article: ${fullArticle.id}`);
-		res.json(fullArticle);
+		// Analyze article if the function is available
+		let analyzedResult: ArticleAnalyzed | null = null;
+
+		if (analyzeArticle) {
+			analyzedResult = await analyzeArticle(localArticle as ArticleAnalyzed);
+		}
+
+		// Use localArticle as fallback if analysis returns null
+		const fullAnalyzed: ArticleAnalyzed = {
+			...(analyzedResult ?? (localArticle as ArticleAnalyzed)),
+			id: crypto.randomUUID(),
+			originalId: localArticle.id,
+			url: localArticle.url,
+			title: localArticle.title,
+			analyzed: true,
+		};
+
+		await saveAnalyzedArticleStore(fullAnalyzed);
+		log(`Saved analyzed article: ${fullAnalyzed.id}`);
+		res.json(fullAnalyzed);
 	} catch (err) {
 		const message = (err as Error).message;
 		await handleError(
@@ -101,14 +133,9 @@ export const getFullAnalyzedArticleHandler = async (
 export const getAllAnalyzedArticlesHandler = async (
 	req: Request,
 	res: Response,
-	handlers: AnalyzedArticleHandlers,
 ) => {
-	const { getAllAnalyzedArticles } = handlers;
-	if (!getAllAnalyzedArticles)
-		return handleError(res, "Analyzed DB not provided", 500, "error");
-
 	try {
-		const all = await getAllAnalyzedArticles();
+		const all = await getAll();
 		res.json(all);
 	} catch (err) {
 		const message = (err as Error).message;
@@ -128,18 +155,13 @@ export const getAllAnalyzedArticlesHandler = async (
 export const saveAnalyzedArticleHandler = async (
 	req: Request,
 	res: Response,
-	handlers: AnalyzedArticleHandlers,
 ) => {
-	const { saveAnalyzedArticle } = handlers;
-	if (!saveAnalyzedArticle)
-		return handleError(res, "Analyzed DB not provided", 500, "error");
-
 	try {
 		const article: ArticleAnalyzed = req.body;
 		if (!article?.id)
 			return handleError(res, "No article ID provided", 400, "warn");
 
-		await saveAnalyzedArticle(article);
+		await saveAnalyzedArticleStore(article);
 		res.json({ success: true, id: article.id });
 	} catch (err) {
 		const message = (err as Error).message;
@@ -159,17 +181,12 @@ export const saveAnalyzedArticleHandler = async (
 export const deleteAnalyzedArticleHandler = async (
 	req: Request,
 	res: Response,
-	handlers: AnalyzedArticleHandlers,
 ) => {
-	const { deleteAnalyzedArticle } = handlers;
-	if (!deleteAnalyzedArticle)
-		return handleError(res, "Analyzed DB not provided", 500, "error");
-
 	try {
 		const { id } = req.params;
 		if (!id) return handleError(res, "No article ID provided", 400, "warn");
 
-		await deleteAnalyzedArticle(id);
+		await deleteById(id);
 		res.json({ success: true, id });
 	} catch (err) {
 		const message = (err as Error).message;
@@ -185,17 +202,17 @@ export const deleteAnalyzedArticleHandler = async (
 /**
  * Helper: register all analyzed article routes in an Express app
  */
-export function registerAnalyzedArticleRoutes(app: Express, handlers: any) {
-	app.get("/articles/analyzed/full", (req, res) =>
-		getFullAnalyzedArticleHandler(req, res, handlers),
+export function registerAnalyzedArticleRoutes(app: Express) {
+	app.get(
+		"/articles/analyzed/full",
+		throttleMiddleware,
+		getFullAnalyzedArticleHandler,
 	);
-	app.get("/articles/analyzed", (req, res) =>
-		getAllAnalyzedArticlesHandler(req, res, handlers),
+	app.get(
+		"/articles/analyzed",
+		throttleMiddleware,
+		getAllAnalyzedArticlesHandler,
 	);
-	app.post("/articles/analyzed/save", (req, res) =>
-		saveAnalyzedArticleHandler(req, res, handlers),
-	);
-	app.delete("/articles/analyzed/delete/:id", (req, res) =>
-		deleteAnalyzedArticleHandler(req, res, handlers),
-	);
+	app.post("/articles/analyzed/save", saveAnalyzedArticleHandler);
+	app.delete("/articles/analyzed/delete/:id", deleteAnalyzedArticleHandler);
 }

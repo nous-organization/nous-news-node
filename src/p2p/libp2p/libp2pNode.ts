@@ -1,3 +1,4 @@
+// src/libp2pNode.ts
 import { noise } from "@chainsafe/libp2p-noise";
 import { yamux } from "@chainsafe/libp2p-yamux";
 import {
@@ -12,8 +13,6 @@ import { tcp } from "@libp2p/tcp";
 // import { webTransport } from "@libp2p/webtransport";
 import { type Multiaddr, multiaddr } from "@multiformats/multiaddr";
 import { createLibp2p, type Libp2p } from "libp2p";
-import { addDebugLog, log } from "@/lib/log";
-import { getExistingLibp2pNode } from "./libp2pInstance";
 // import { kadDHT } from '@libp2p/kad-dht'
 
 /**
@@ -32,13 +31,6 @@ export async function createLibp2pNode(
 ): Promise<Libp2p> {
 	let libp2p: Libp2p;
 	try {
-		const existing = getExistingLibp2pNode();
-
-		if (existing) {
-			console.warn("♻️ Reusing existing Libp2p node (hot reload)");
-			return existing;
-		}
-
 		const options = {
 			// peerDiscovery: [mdns()],
 			addresses: {
@@ -73,13 +65,7 @@ export async function createLibp2pNode(
 
 	// Log listening addresses (forEach callback should not return a value)
 	libp2p.getMultiaddrs().forEach((addr: Multiaddr) => {
-		log(`[P2P] 🚦 Listening on: ${addr.toString()}`);
-		addDebugLog({
-			message: `🚦 Listening on: ${addr.toString()}`,
-			level: "info",
-			// meta: { address: addr.toString() },
-			// type: "p2p",
-		});
+		console.log(`[P2P] 🚦 Listening on: ${addr.toString()}`);
 	});
 
 	// Peer discovery with mdns
@@ -93,36 +79,18 @@ export async function createLibp2pNode(
 		for (const addr of relayAddresses) {
 			try {
 				await libp2p.dial(multiaddr(addr));
-				log(`[P2P] Connected to relay ${addr.toString()}`);
-				addDebugLog({
-					message: `Connected to relay ${addr.toString()}`,
-					level: "info",
-					// meta: { address: addr.toString() },
-					// type: "p2p",
-				});
+				console.log(`[P2P] Connected to relay ${addr.toString()}`);
 			} catch (err) {
-				log(
+				console.log(
 					`[P2P] Failed to connect to relay ${addr}: ${(err as Error).message}`,
 				);
-				addDebugLog({
-					message: `Failed to connect to relay ${addr}: ${(err as Error).message}`,
-					level: "info",
-					// meta: { address: addr.toString(), error: (err as Error).message },
-					// type: "p2p",
-				});
 			}
 		}
 	}
 
 	// PubSub logging
 	(libp2p.services.pubsub as any).addEventListener("message", (evt: any) => {
-		log(`[P2P] PubSub message received: ${JSON.stringify(evt.detail)}`);
-		addDebugLog({
-			message: `PubSub message received: ${JSON.stringify(evt.detail)}`,
-			level: "info",
-			// meta: { event: JSON.stringify(evt.detail) },
-			// type: "p2p",
-		});
+		console.log(`[P2P] PubSub message received: ${JSON.stringify(evt.detail)}`);
 	});
 
 	return libp2p;

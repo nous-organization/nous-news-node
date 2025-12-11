@@ -1,24 +1,27 @@
-// frontend/src/p2p/httpServer.ts
-
+// src/httpServer.ts
 import http from "node:http";
 import cors from "cors";
 import express, { type Express } from "express";
 import type { Helia } from "helia";
+import { WebSocketServer } from "ws";
+// Debug DB helper
+import { getInstance as getDebugDB } from "@/p2p/orbitdb/stores/debug/setup";
 import type { NodeStatus } from "@/types";
 import { log, setBroadcastFn } from "./lib/log";
-import { WebSocketServer } from "ws";
+// Route registration functions
 import { registerFederatedArticleRoutes } from "./routes/route-articles-federated";
 import { registerLocalArticleRoutes } from "./routes/route-articles-local";
-import { registerSourceRoutes } from "./routes/route-sources";
-// Import the new-style route registration functions
-import { registerDebugLogRoutes } from "./routes/route-log";
-import { registerStatusRoutes } from "./routes/route-status";
 import { registerDashboardRoutes } from "./routes/route-dashboard";
+import { registerDebugLogRoutes } from "./routes/route-log";
+import { registerSourceRoutes } from "./routes/route-sources";
+import { registerStatusRoutes } from "./routes/route-status";
 
-// Base URL for reference (useful for logging or generating URLs)
+// Base URL for logging / generating links
 export const BASE_URL = process.env.BASE_URL ?? "http://localhost";
 
-// src/p2p/httpServer.ts
+/**
+ * Base server context
+ */
 export interface BaseServerContext {
 	status: NodeStatus;
 	orbitdbConnected: boolean;
@@ -26,15 +29,13 @@ export interface BaseServerContext {
 	helia: Helia;
 }
 
-// Context object passed to each route handler
+/**
+ * Extended context (arbitrary extra props)
+ */
 export type HttpServerContext = BaseServerContext & { [key: string]: any };
 
 /**
- * Create an Express-based HTTP server for the P2P node.
- * - Registers routes from all modules
- * - Adds CORS headers
- * - Parses JSON bodies
- * - Supports graceful shutdown
+ * Create an Express HTTP server
  */
 export function createHttpServer(
 	httpPort: number,
@@ -43,16 +44,12 @@ export function createHttpServer(
 	const app = express();
 
 	//------------------------------------------------------------
-	// Middleware: JSON parsing
+	// Middleware
 	//------------------------------------------------------------
 	app.use(express.json());
-
-	//------------------------------------------------------------
-	// Middleware: CORS
-	//------------------------------------------------------------
 	app.use(
 		cors({
-			origin: "*", // allow any origin; change to specific domains if needed
+			origin: "*",
 			methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
 			allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
 			preflightContinue: false,
@@ -61,76 +58,58 @@ export function createHttpServer(
 	);
 
 	//------------------------------------------------------------
-	// Register routes using the new registration functions
+	// Register routes directly from modules
 	//------------------------------------------------------------
-	if (registerDebugLogRoutes && context.debugDB) {
-		registerDebugLogRoutes(app, context.debugDB);
-	}
-
-	if (registerStatusRoutes) {
-		registerStatusRoutes(app);
-	}
-
-	if (registerSourceRoutes) {
-		registerSourceRoutes(app);
-	}
-
-	if (registerLocalArticleRoutes) {
-		registerLocalArticleRoutes(app, context);
-	}
-
-	if (registerFederatedArticleRoutes) {
-		registerFederatedArticleRoutes(app, context);
-	}
-
-	if (registerDashboardRoutes) {
-		registerDashboardRoutes(app, context);
-	}
+	registerDebugLogRoutes(app);
+	registerStatusRoutes?.(app);
+	registerSourceRoutes?.(app);
+	registerLocalArticleRoutes?.(app);
+	registerFederatedArticleRoutes?.(app);
+	registerDashboardRoutes?.(app);
 
 	//------------------------------------------------------------
-	// Express -> Node HTTP server
+	// Create HTTP server
 	//------------------------------------------------------------
 	const server = http.createServer(app);
 
-	// WebSocket server (live events)
+	//------------------------------------------------------------
+	// WebSocket server for live events
+	//------------------------------------------------------------
 	try {
 		const wss = new WebSocketServer({ server, path: "/ws" });
 
-		function broadcastEvent(event: any) {
+		const broadcastEvent = (event: any) => {
 			const msg = JSON.stringify(event);
 			for (const client of wss.clients) {
-				// @ts-ignore - ws client type
 				if ((client as any).readyState === (client as any).OPEN) {
 					(client as any).send(msg);
 				}
 			}
-		}
+		};
 
-		// Expose broadcaster to logging helpers
-		try {
-			setBroadcastFn((ev: any) => {
-				try {
-					broadcastEvent(ev);
-				} catch (_) {}
-			});
-		} catch (e) {
-			// ignore if log not available
-		}
+		setBroadcastFn((ev: any) => {
+			try {
+				broadcastEvent(ev);
+			} catch (_) {}
+		});
 
 		wss.on("connection", (socket: any) => {
 			log("🔌 WS client connected");
 			socket.on("close", () => log("🔌 WS client disconnected"));
 		});
 	} catch (e) {
-		log("⚠️ WebSocket server not started: " + (e as Error).message, "warn");
+		log(`⚠️ WebSocket server not started: ${(e as Error).message}`, "warn");
 	}
 
+	//------------------------------------------------------------
+	// Start server
+	//------------------------------------------------------------
 	server.listen(httpPort, () => {
 		console.log(`P2P node HTTP API running on ${BASE_URL}:${httpPort}`);
 	});
 
 	//------------------------------------------------------------
-	// Graceful shutdown helper
+	// Graceful shutdown
 	//------------------------------------------------------------
 	async function shutdown() {
 		return new Promise<void>((resolve, reject) => {
@@ -142,7 +121,6 @@ export function createHttpServer(
 				log("✅ HTTP server closed");
 				resolve();
 			});
-			// Close all connections
 			server.closeAllConnections?.();
 		});
 	}

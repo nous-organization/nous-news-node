@@ -1,12 +1,13 @@
-// server/src/server/log.ts
-
-import { getRunningInstance, type NodeInstance } from "@/node";
+import { add as addDebugDBEntry } from "@/p2p/orbitdb/stores/debug";
 import type { DebugLogEntry } from "@/types";
 
 /**
  * Simple console log function for P2P backend code
  */
-export function log(message: string, level: "info" | "warn" | "error" = "info") {
+export function log(
+	message: string,
+	level: "info" | "warn" | "error" = "info",
+) {
 	const timestamp = new Date().toISOString();
 	const formatted = `${timestamp} - ${message}`;
 
@@ -29,17 +30,18 @@ export function setBroadcastFn(fn: (ev: any) => void) {
 }
 
 /**
- * Allows us to broadcast an event 
- * @param event 
+ * Allows broadcasting an event to any registered listener
  */
 export function broadcast(event: any) {
-  try {
-    if (broadcastFn) broadcastFn(event);
-  } catch {}
+	try {
+		if (broadcastFn) broadcastFn(event);
+	} catch {}
 }
 
 /**
- * addDebugLog now just logs to console and optionally broadcasts
+ * Adds a debug log entry
+ * @param entry - log message + optional metadata
+ * @param save - whether to persist to OrbitDB (default true)
  */
 export async function addDebugLog(
 	entry: {
@@ -55,37 +57,37 @@ export async function addDebugLog(
 		timestamp: new Date().toISOString(),
 		message: entry.message,
 		level: entry.level ?? "info",
-		meta: { ...(entry.meta ?? null), type: entry.type ?? "" },
+		meta: { ...(entry.meta ?? {}), type: entry.type ?? "" },
 	};
 
 	// local console output
 	const prefix = `[DEBUG] ${logEntry.timestamp} - ${logEntry.message}`;
-	if (logEntry.level === "warn") console.warn(prefix);
-	else if (logEntry.level === "error") console.error(prefix);
-	else console.log(prefix);
+	switch (logEntry.level) {
+		case "warn":
+			console.warn(prefix);
+			break;
+		case "error":
+			console.error(prefix);
+			break;
+		default:
+			console.log(prefix);
+	}
 
 	// Broadcast to any live WS clients
-	try {
-		if (broadcastFn) {
+	if (broadcastFn) {
+		try {
 			broadcastFn({ type: "debug-log", payload: logEntry });
+		} catch {
+			// ignore broadcast errors
 		}
-	} catch (e) {
-		// ignore broadcast failures
 	}
 
-	const runningInstance = getRunningInstance();
-	if (!runningInstance) {
-		return;
-	}
-	const { debugDB } = runningInstance;
-
-	try {
-		// Log the error to the debug db
-		if (debugDB && save) {
-			await debugDB.add(logEntry);
-		} else {
-			// Log the error asynchronously; failures are silently ignored
-			log(entry.message, entry.level ?? "info");
+	// Persist to OrbitDB if requested
+	if (save) {
+		try {
+			await addDebugDBEntry(logEntry);
+		} catch (err) {
+			console.error("❌ Failed to persist debug log:", (err as Error).message);
 		}
-	} catch {}
+	}
 }
