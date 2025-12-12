@@ -1,0 +1,24 @@
+version: "3.9"
+
+services:
+  python-ai:
+    build:
+      context: ./python-ai
+      dockerfile: Dockerfile
+    container_name: nous-python-ai
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  node-app:
+    build:
+      context: ./node-app
+      dockerfile: Dockerfile
+    container_name: nous-node
+    depends_on:
+      - python-ai
+    environment:
+      PYTHON_BACKEND_URL: "http://python-ai:8000"
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
