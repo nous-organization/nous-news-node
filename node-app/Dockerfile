@@ -24,6 +24,6 @@ RUN chmod +x ./scripts/*.sh
 RUN npm run prebuild && npm run build
 
 # Expose Node port
-EXPOSE 3000
+EXPOSE 9001
 
 CMD ["node", "dist/setup.js"]

@@ -175,15 +175,16 @@ export async function loadFullArticle(
 	};
 
 	// --- AI analysis ---
-	let analyzed: ArticleAnalyzed | null = null;
-	try {
-		analyzed = await analyzeArticleAI(enrichedBase);
-	} catch (err: any) {
-		console.warn(
-			`AI analysis failed for article ${article.id}: ${err.message}`,
-		);
-	}
+	// let analyzed: ArticleAnalyzed | null = null;
+	// try {
+	// 	analyzed = await analyzeArticleAI(enrichedBase);
+	// } catch (err: any) {
+	// 	console.warn(
+	// 		`AI analysis failed for article ${article.id}: ${err.message}`,
+	// 	);
+	// }
 
 	// Return analyzed version if available, otherwise enriched base
-	return analyzed ?? enrichedBase;
+	// return analyzed ?? enrichedBase;
+	return enrichedBase;
 }

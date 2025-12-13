@@ -49,3 +49,44 @@ git clone https://github.com/your-username/nous-news-node.git
 cd nous-news-node
 npm install
 ```
+
+### Python AI Pipeline
+
+See auto FastAPI-generated docs at <http://localhost:8000/docs>
+
+### Quick Tests to ensure AI is working
+
+# Sentiment route
+
+curl -X POST http://localhost:8000/sentiment \
+ -H "Content-Type: application/json" \
+ -d '{"text":"I love FastAPI, it is amazing!"}'
+
+# Political bias route
+
+curl -X POST http://localhost:8000/political-bias \
+ -H "Content-Type: application/json" \
+ -d '{"text":"Government should regulate AI development carefully."}'
+
+# Analyze article
+
+curl -X POST http://localhost:8000/analyze \
+ -H "Content-Type: application/json" \
+ -d '{"content":"Some article content here"}'
+
+### AI Architecture
+
+philosophical.py
+└── Domain logic only
+├── choose model
+├── choose prompt
+└── call llm_json_runner()
+
+llm_json_runner.py
+└── Infra logic
+├── token limits
+├── truncation
+├── generation
+├── JSON extraction
+├── JSON validation
+└── consistent AIResponse

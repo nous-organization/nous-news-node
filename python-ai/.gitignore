@@ -1,0 +1,47 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Virtual environments
+.venv/
+env/
+venv/
+
+# Logs
+*.log
+logs/
+
+# IDE/editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# MacOS
+.DS_Store
+
+# Hugging Face / Transformers caches
+transformers_cache/
+torch_model_cache/
+hf_hub/
+cache/
+
+# Model registry / temporary local files
+*.bin
+*.json
+*.pt
+*.ckpt
+*.h5
+*.msgpack
+
+# pytest cache
+.pytest_cache/
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*

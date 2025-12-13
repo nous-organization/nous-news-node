@@ -3,31 +3,7 @@ import { setJobStatus } from "@/lib/jobs";
 import { addDebugLog, broadcast } from "@/lib/log";
 import type { Article } from "@/types/article";
 import type { ArticleAnalyzed } from "@/types/article-analyzed";
-
-const PYTHON_BACKEND_URL =
-  process.env.PYTHON_BACKEND_URL || "http://localhost:8000";
-
-/**
- * Helper to call Python AI service.
- */
-async function callPythonAI(endpoint: string, payload: Record<string, any>) {
-  try {
-    const res = await fetch(`${PYTHON_BACKEND_URL}${endpoint}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    if (!res.ok) {
-      throw new Error(`Python AI returned ${res.status}: ${res.statusText}`);
-    }
-
-    return await res.json();
-  } catch (err: any) {
-    console.warn(`Python AI call failed: ${err.message}`);
-    return { status: "error", data: null, errors: [err.message] };
-  }
-}
+import { callPythonAI } from "@/lib/ai/utils"
 
 /**
  * Analyze a single article using the Python backend
@@ -51,8 +27,8 @@ export async function analyzeArticle(
     ["sentiment", "/sentiment"],
     ["cognitiveBiases", "/cognitive-bias"],
     ["antithesis", "/antithesis"],
-    ["philosophical", "/philosophical-insight"],
-    ["tags", "/extract-tags"],
+    ["philosophical", "/philosophical"],
+    // ["tags", "/extract-tags"],
   ];
 
   for (const [key, endpoint] of steps) {

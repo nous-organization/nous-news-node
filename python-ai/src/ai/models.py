@@ -1,123 +1,201 @@
 """
-Model prefetch + pipeline cache for Nous Python backend.
-Uses shared get_device() helper for CUDA / MPS / CPU.
+Model registry and pipeline cache for Nous backend.
+
+Responsibilities:
+- Device selection
+- Hugging Face pipeline loading
+- Manual model loading (LLMs or broken pipelines)
+- Centralized model registry
 """
 
 import os
+import logging
 from pathlib import Path
+from typing import Dict, Any
+from .config import MODEL_DIR
+
 import torch
-from transformers import pipeline
+from transformers import (
+    pipeline,
+    AutoModelForSequenceClassification,
+    AutoModelForCausalLM,
+)
 
-# -----------------------------------------------------
-# Import device detection helper
-# -----------------------------------------------------
 from .utils.device import get_device
+from .utils.tokenizer import get_tokenizer
 
+# ---------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
+    logger.addHandler(handler)
+
+# ---------------------------------------------------------------------
+# Device
+# ---------------------------------------------------------------------
 DEVICE = get_device()
-DEVICE_NAME = str(DEVICE)
+logger.info(f"[models] Using device: {DEVICE}")
 
-print(f"[models] Using device: {DEVICE_NAME}")
-
-
-# -----------------------------------------------------
-# Model registry + cache directory
-# -----------------------------------------------------
-MODEL_DIR = Path(os.environ.get("MODELS_PATH", ".models")).resolve()
-MODEL_DIR.mkdir(parents=True, exist_ok=True)
-
-MODELS = {
-    "distilbert-sst2": "distilbert-base-uncased-finetuned-sst-2-english",
-    "bert-ner": "dslim/bert-base-NER",
-    "gpt2": "gpt2",
-    # "distilbart-cnn": "sshleifer/distilbart-cnn-6-6",
-    # "mbart-translate": "facebook/mbart-large-50-many-to-many-mmt",
-    # "minilm-embed": "sentence-transformers/all-MiniLM-L6-v2",
+# ---------------------------------------------------------------------
+# Model registry
+# ---------------------------------------------------------------------
+MODELS: Dict[str, Dict[str, Any]] = {
+    "distilbert-sst2": {
+        "hf_id": "distilbert-base-uncased-finetuned-sst-2-english",
+        "task": "text-classification",
+        "pipeline": True,
+    },
+    "bert-ner": {
+        "hf_id": "dslim/bert-base-NER",
+        "task": "token-classification",
+        "pipeline": True,
+    },
+    "gpt2": {
+        "hf_id": "gpt2",
+        "task": "text-generation",
+        "pipeline": True,
+    },
+    "political-leaning": {
+        "hf_id": "matous-volf/political-leaning-deberta-large",
+        "task": "text-classification",
+        "pipeline": False,
+        "model_class": AutoModelForSequenceClassification,
+        "labels": ["left", "center", "right"],
+    },
+    "mistral-7b-instruct": {
+        "hf_id": "mistralai/Mistral-7B-Instruct-v0.2",
+        "task": "text-generation",
+        "pipeline": False,
+        "model_class": AutoModelForCausalLM,
+    },
 }
 
+# ---------------------------------------------------------------------
+# Caches
+# ---------------------------------------------------------------------
+_PIPELINE_CACHE: Dict[str, Any] = {}
+_MANUAL_MODEL_CACHE: Dict[str, Any] = {}
 
-# -----------------------------------------------------
-# Pipeline + tokenizer cache
-# -----------------------------------------------------
-_PIPELINE_CACHE = {}
-_TOKENIZER_CACHE = {}
-
-
-# -----------------------------------------------------
-# Pipeline loader using GPU/MPS/CPU via helper
-# -----------------------------------------------------
+# ---------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------
 def get_pipeline(task: str, model_key: str):
-    cache_key = f"{task}:{model_key}"
+    """
+    Retrieve a pipeline or manual model bundle for a given task + model key.
+    """
+    spec = MODELS.get(model_key)
+    if spec is None:
+        raise ValueError(f"Unknown model key: {model_key}")
 
+    if spec.get("pipeline", True):
+        return _load_pipeline(model_key, spec)
+
+    return _load_manual_model(model_key, spec)
+
+# ---------------------------------------------------------------------
+# Pipeline loader
+# ---------------------------------------------------------------------
+def _load_pipeline(model_key: str, spec: Dict[str, Any]):
+    cache_key = f"{spec['task']}:{model_key}"
     if cache_key in _PIPELINE_CACHE:
         return _PIPELINE_CACHE[cache_key]
 
-    model_name = MODELS.get(model_key, model_key)
+    logger.info(f"[models] Loading pipeline → {spec['hf_id']}")
 
-    print(f"[models] Loading pipeline: {task} → {model_name} on {DEVICE_NAME}")
+    device_opt = -1
+    device_map = None
+    dtype = torch.float32
 
-    # Determine pipeline device options
     if DEVICE.type == "cuda":
         device_opt = 0
-        device_map = None
-        torch_dtype = torch.float16
+        dtype = torch.float16
     elif DEVICE.type == "mps":
-        # HF pipeline does not support "device" index for MPS
-        device_opt = -1
         device_map = "auto"
-        torch_dtype = torch.float16
-    else:
-        device_opt = -1
-        device_map = None
-        torch_dtype = torch.float32
+        dtype = torch.float16
 
     pipe = pipeline(
-        task,
-        model=model_name,
-        tokenizer=model_name,
-        cache_dir=str(MODEL_DIR),
+        task=spec["task"],
+        model=spec["hf_id"],
+        tokenizer=spec["hf_id"],
         device=device_opt,
         device_map=device_map,
-        torch_dtype=torch_dtype,
+        torch_dtype=dtype,
+        cache_dir=str(MODEL_DIR),
     )
 
     _PIPELINE_CACHE[cache_key] = pipe
     return pipe
 
+# ---------------------------------------------------------------------
+# Manual / LLM loader
+# ---------------------------------------------------------------------
+def _load_manual_model(model_key: str, spec: Dict[str, Any]):
+    if model_key in _MANUAL_MODEL_CACHE:
+        return _MANUAL_MODEL_CACHE[model_key]
 
-# -----------------------------------------------------
-# Prefetch all models
-# -----------------------------------------------------
-def prefetch_models():
-    print("[models] Prefetching all models…")
+    # For local-only loading, override hf_id with absolute path if Mistral
+    hf_id = spec["hf_id"]
+    if model_key == "mistral-7b-instruct":
+        hf_id = "/absolute/path/to/local/mistral-7b-instruct"  # <- set absolute path
+        local_files_only = True
+    else:
+        local_files_only = False
 
-    for key, model_name in MODELS.items():
-        print(f"→ Checking {key} ({model_name})")
+    model_class = spec["model_class"]
 
-        if "sst2" in key:
-            task = "text-classification"
-        elif "ner" in key:
-            task = "token-classification"
-        elif key == "gpt2":
-            task = "text-generation"
-        else:
-            task = "feature-extraction"
+    logger.info(f"[models] Loading manual model → {hf_id}")
 
-        try:
-            get_pipeline(task, key)
-            print(f"✓ Prefetched {key}")
-        except Exception as e:
-            print(f"✗ Failed to prefetch {key}: {e}")
+    # Load tokenizer
+    tokenizer = get_tokenizer(hf_id, local_files_only=local_files_only)
 
-    print("[models] Prefetch complete.")
+    # Load model
+    model = model_class.from_pretrained(
+        hf_id,
+        cache_dir=str(MODEL_DIR),
+        torch_dtype=torch.float16 if DEVICE.type != "cpu" else torch.float32,
+        device_map="auto" if DEVICE.type != "cpu" else None,
+        local_files_only=local_files_only,
+    )
+    model.eval()
 
+    # If text-generation, wrap a generate helper
+    if spec["task"] == "text-generation":
 
-# -----------------------------------------------------
-# Auto-prefetch
-# -----------------------------------------------------
-AUTO_PREFETCH = os.environ.get("PREFETCH_MODELS", "false").lower() == "true"
+        def generate(
+            prompt: str,
+            max_new_tokens: int = 256,
+            temperature: float = 0.7,
+            do_sample: bool = True,
+        ) -> str:
+            inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+            with torch.no_grad():
+                output = model.generate(
+                    **inputs,
+                    max_new_tokens=max_new_tokens,
+                    temperature=temperature,
+                    do_sample=do_sample,
+                    pad_token_id=tokenizer.eos_token_id,
+                )
+            return tokenizer.decode(output[0], skip_special_tokens=True)
 
-if AUTO_PREFETCH:
-    try:
-        prefetch_models()
-    except Exception as e:
-        print("[models] Prefetch failed:", e)
+        bundle = {
+            "model": model,
+            "tokenizer": tokenizer,
+            "generate": generate,
+            "task": spec["task"],
+        }
+    else:
+        bundle = {
+            "model": model,
+            "tokenizer": tokenizer,
+            "labels": spec.get("labels"),
+            "task": spec["task"],
+        }
+
+    _MANUAL_MODEL_CACHE[model_key] = bundle
+    return bundle

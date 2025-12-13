@@ -20,5 +20,5 @@ services:
     environment:
       PYTHON_BACKEND_URL: "http://python-ai:8000"
     ports:
-      - "3000:3000"
+      - "9001:9001"
     restart: unless-stopped

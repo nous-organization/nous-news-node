@@ -7,7 +7,7 @@
 
 import type { Express, NextFunction, Request, Response } from "express";
 import { DEFAULT_SOURCES } from "@/constants/sources";
-import { analyzeArticle, analyzeArticleJob } from "@/lib/ai";
+import { analyzeArticleJob } from "@/lib/ai";
 import { translateMultipleTitlesAI } from "@/lib/ai/translate";
 import { setJobStatus } from "@/lib/jobs";
 import { addDebugLog, log } from "@/lib/log";
@@ -21,7 +21,7 @@ import {
 	getByIdentifier,
 	getFullArticle,
 } from "@/p2p/orbitdb/stores/articles/local";
-import type { Article, ArticleAnalyzed, Source } from "@/types";
+import type { Article, Source } from "@/types";
 import { handleError } from "./helpers";
 
 /**
@@ -59,6 +59,7 @@ export const throttleMiddleware = (
 /**
  * POST /articles/local/translate
  * Translate specified fields of local articles to a target language
+ * TODO: This needs to call the new Python backend translator
  */
 export const translateArticleHandler = async (req: Request, res: Response) => {
 	const {

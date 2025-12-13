@@ -1,3 +1,4 @@
+// src/p2p/orbitdb/stores/articles/federated/setup.ts
 import { Documents, IPFSAccessController, type OrbitDB } from "@orbitdb/core";
 import { log } from "@/lib/log";
 import { loadDBPaths, saveDBPaths } from "@/p2p/orbitdb/db-paths";

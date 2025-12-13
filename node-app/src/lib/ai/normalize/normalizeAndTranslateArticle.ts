@@ -1,84 +1,39 @@
 // src/lib/ai/normalize/normalizeAndTranslateArticle.ts
-
-import { summarizeContentAI } from "@/lib/ai/summarizer";
-import { translateContentAI } from "@/lib/ai/translate";
+import { cleanHTML, callPythonAI } from "@/lib/ai/utils";
 import type { NormalizedArticleResults } from "@/types";
-import { extractTagsAI } from "./extractTagsAI";
-import { cleanHTML } from "./utils";
 
 /**
- * Full AI-enhanced normalization pipeline with optional translation.
- * Token-aware truncation is applied before AI calls.
- * @param rawHTML - Raw HTML from source or IPFS
- * @param targetLanguage - Optional BCP-47 language code for translation (defaults to English)
- * @returns Object with content, summary, tags
+ * Normalize and optionally translate an article using the unified Python AI endpoint.
  */
 export async function normalizeAndTranslateArticle(
-	rawHTML: string,
-	targetLanguage = "en",
+  rawHTML: string,
+  targetLanguage = "en"
 ): Promise<NormalizedArticleResults> {
-	const errors: string[] = [];
-	const content = cleanHTML(rawHTML);
+  const content = cleanHTML(rawHTML);
 
-	let translation: string | undefined;
-	let language: string | undefined;
+  try {
+    const resp = await callPythonAI("/normalize", {
+      raw_html: rawHTML,
+      target_language: targetLanguage,
+    });
 
-	// 1. Translation (if requested)
-	try {
-		const result = await translateContentAI(content, targetLanguage);
-		translation = result.translation ?? content;
-		language = result.language;
-		if (result.errors?.length) errors.push(...result.errors);
-		console.log(
-			`[normalizeAndTranslateArticle] content was translated: ${translation}`,
-		);
-	} catch (err) {
-		const msg = (err as Error)?.message ?? "Unknown translation error";
-		console.warn("[normalizeAndTranslateArticle] translation failed:", msg);
-		translation = content;
-		errors.push(msg);
-	}
+    // Expect the Python response to already include:
+    // content, summary, tags, language, errors, status
+    return resp as NormalizedArticleResults;
 
-	// 2. Summarization
-	let summary = "";
-	try {
-		summary = await summarizeContentAI(translation ?? content);
-	} catch (err) {
-		const msg = (err as Error)?.message ?? "Unknown summarization error";
-		console.warn("[normalizeAndTranslateArticle] summarization failed:", msg);
-		summary =
-			translation
-				?.split(/(?<=[.!?])\s+/)
-				.slice(0, 3)
-				.join(" ") ?? "";
-		errors.push(msg);
-	}
+  } catch (err: any) {
+    const msg = err?.message ?? "Unknown normalization error";
+    console.warn("[normalizeAndTranslateArticle] normalize endpoint failed:", msg);
 
-	// 3. Tag extraction
-	let tags: string[] = [];
-	try {
-		tags = await extractTagsAI(translation ?? content);
-	} catch (err) {
-		const msg = (err as Error)?.message ?? "Unknown tag extraction error";
-		console.warn("[normalizeAndTranslateArticle] tag extraction failed:", msg);
-		tags = [];
-		errors.push(msg);
-	}
-
-	// Determine status
-	let status: NormalizedArticleResults["status"] = "success";
-	if (errors.length > 0 && (translation || summary || tags)) {
-		status = "partial";
-	} else if (errors.length > 0 && !translation && !summary && !tags) {
-		status = "error";
-	}
-
-	return {
-		content: translation ?? content,
-		summary,
-		tags,
-		language,
-		errors: errors.length > 0 ? errors : undefined,
-		status,
-	};
+    // Fallback minimal result
+    return {
+      content,
+      summary: content.split(/(?<=[.!?])\s+/).slice(0, 3).join(" "),
+      tags: [],
+      language: targetLanguage,
+      errors: [msg],
+      status: "error",
+    };
+  }
 }
+

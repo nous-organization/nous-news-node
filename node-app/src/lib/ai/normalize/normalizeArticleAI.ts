@@ -1,7 +1,7 @@
 import { summarizeContentAI } from "@/lib/ai/summarizer";
 import type { NormalizedArticleResults } from "@/types/results";
-import { extractTagsAI } from "./extractTagsAI";
-import { cleanHTML } from "./utils";
+import { extractTagsAI } from "@/lib/ai/normalize/extractTagsAI";
+import { cleanHTML } from "@/lib/ai/utils";
 
 /**
  * Full AI-enhanced normalization pipeline.
