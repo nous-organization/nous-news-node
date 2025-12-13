@@ -1,6 +1,4 @@
 """
-llm_json_runner.py
-
 LLM JSON Runner
 
 Runs instruction-tuned LLMs and guarantees STRICT JSON output.
@@ -76,19 +74,24 @@ def run_llm_json(
     )
 
     if not raw_output or not raw_output.strip():
+        logger.error("LLM returned empty output")
         raise ValueError("LLM returned empty output")
 
-    match = _JSON_OBJECT_RE.search(raw_output)
-    if not match:
-        logger.error("Raw LLM output:\n%s", raw_output)
-        raise ValueError("No JSON object found in LLM output")
+    # Check if raw output starts and ends with curly braces
+    if raw_output.startswith("{") and raw_output.endswith("}"):
+        match = raw_output
+    else:
+        logger.error(f"Unexpected LLM output format: {raw_output}")
+        raise ValueError("Unexpected LLM output format")
 
     try:
-        parsed = json.loads(match.group(0))
+        parsed = json.loads(match)
     except json.JSONDecodeError as e:
+        logger.error(f"Invalid JSON returned by LLM: {e}")
         raise ValueError(f"Invalid JSON returned by LLM: {e}")
 
     if not isinstance(parsed, dict):
+        logger.error("LLM JSON output is not an object")
         raise ValueError("LLM JSON output is not an object")
 
     if schema_validator:

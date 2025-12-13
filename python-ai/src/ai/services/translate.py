@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 # ------------------------------
-# Model config
+# Model configuration constants
 # ------------------------------
 LANG_DETECT_MODEL_KEY = "bert-ner"
 LANG_DETECT_TASK = "text-classification"
@@ -37,24 +37,36 @@ TRANSLATION_TASK = "translation"
 LLM_MODEL_KEY = "mistral-7b-instruct"
 
 TRANSLATION_TOKEN_LIMIT = 128
-LANG_DETECTOR_BOUNDS = 128
+LANG_DETECTOR_BOUNDS = 128  # Limit for language detection input
 
 # ------------------------------
-# Helpers
+# Helper functions
 # ------------------------------
 def get_detector():
+    """Retrieve the language detection model pipeline."""
     return get_pipeline(LANG_DETECT_TASK, LANG_DETECT_MODEL_KEY)
 
 def get_translator():
+    """Retrieve the translation model pipeline."""
     return get_pipeline(TRANSLATION_TASK, TRANSLATION_MODEL_KEY)
 
 def _split_sentences(text: str) -> List[str]:
+    """Split the text into sentences for translation."""
     return re.findall(r"[^.!?]+[.!?]*", text) or [text]
 
 # ------------------------------
 # Language Detection
 # ------------------------------
 def detect_language(content: str) -> AIResponse:
+    """
+    Detect the language of the given content.
+
+    Args:
+    - content (str): The text content whose language is to be detected.
+
+    Returns:
+    - AIResponse: Language detection result.
+    """
     meta: Dict[str, Any] = {}
 
     if not content.strip():
@@ -95,6 +107,16 @@ def detect_language(content: str) -> AIResponse:
 # Translation
 # ------------------------------
 def translate(content: str, target_language: Optional[str] = None) -> AIResponse:
+    """
+    Translate content to the target language.
+
+    Args:
+    - content (str): The text content to be translated.
+    - target_language (str, optional): The target language for translation. Defaults to None.
+
+    Returns:
+    - AIResponse: Translation result or fallback.
+    """
     meta: Dict[str, Any] = {}
     errors: List[str] = []
 
@@ -123,7 +145,7 @@ def translate(content: str, target_language: Optional[str] = None) -> AIResponse
     meta["source_mbart_lang"] = src_mbart
     meta["language_detection"] = src_resp.meta
 
-    # Short-circuit: same language
+    # Short-circuit: same language (no translation needed)
     if src_iso == target_iso:
         return AIResponse(
             status="ok",
@@ -133,7 +155,7 @@ def translate(content: str, target_language: Optional[str] = None) -> AIResponse
         )
 
     # ------------------------------
-    # Primary: mBART MT
+    # Primary: mBART Translation
     # ------------------------------
     try:
         tokenizer = get_tokenizer(TRANSLATION_MODEL_KEY)
@@ -174,7 +196,7 @@ def translate(content: str, target_language: Optional[str] = None) -> AIResponse
         errors.append(f"MT failed: {e}")
 
     # ------------------------------
-    # Fallback: Mistral LLM
+    # Fallback: Mistral LLM Translation
     # ------------------------------
     try:
         prompt = get_translation_prompt(content, target_iso)
@@ -182,9 +204,8 @@ def translate(content: str, target_language: Optional[str] = None) -> AIResponse
         llm_response = run_llm_json(
             prompt=prompt,
             model=LLM_MODEL_KEY,
-            max_input_tokens=512,
-            max_prompt_tokens=384,
             max_new_tokens=512,
+            max_prompt_tokens=384,
             temperature=0.0,
             do_sample=False,
             meta={"analysis_type": "translation"},

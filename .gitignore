@@ -6,3 +6,7 @@
 
 # AI Model Cache
 .models/
+
+# Python
+.pytest_cache
+.venv

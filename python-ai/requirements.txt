@@ -10,3 +10,8 @@ accelerate
 beautifulsoup4
 lxml
 protobuf
+boto3
+requests
+regex
+sacremoses
+torchvision  # Optional but useful for some transformer-based models

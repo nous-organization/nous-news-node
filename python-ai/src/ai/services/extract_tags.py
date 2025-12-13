@@ -102,7 +102,7 @@ def extract_tags(content: str) -> AIResponse:
             tags = sorted({
                 e["word"].lower()
                 for e in entities
-                if e.get("entity_group")
+                if "entity_group" in e and e["entity_group"]
             })
 
         status = "ok" if not errors else ("partial" if tags else "error")

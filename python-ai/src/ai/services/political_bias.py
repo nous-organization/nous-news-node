@@ -21,7 +21,7 @@ from ..types import AIResponse
 from ..models import get_pipeline
 from ..prompts.political_bias_prompt import get_political_bias_prompt
 from ..runners.llm_json_runner import run_llm_json
-from ..utils.tokenizer import get_tokenizer 
+from ..utils.tokenizer import get_tokenizer
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -38,7 +38,6 @@ CLASSIFIER_TASK = "text-classification"
 
 ALLOWED_BIASES = {"left", "center", "right", "uncertain"}
 
-
 # ---------------------------------------------------------------------
 # Schema validation
 # ---------------------------------------------------------------------
@@ -49,7 +48,6 @@ def _validate_llm_schema(obj: Dict[str, Any]) -> None:
     bias = obj.get("bias")
     if bias not in {"left", "center", "right"}:
         raise ValueError(f"Invalid bias value: {bias}")
-
 
 # ---------------------------------------------------------------------
 # Public API
@@ -81,9 +79,7 @@ def detect_political_bias(content: Optional[str]) -> AIResponse:
         llm_response = run_llm_json(
             prompt=prompt,
             model=LLM_MODEL_KEY,
-            max_input_tokens=MAX_INPUT_TOKENS,
-            max_prompt_tokens=384,
-            max_new_tokens=128,
+            max_new_tokens=128,  # Keeps this as it limits the output length
             temperature=0.2,
             do_sample=False,
             schema_validator=_validate_llm_schema,
@@ -102,7 +98,7 @@ def detect_political_bias(content: Optional[str]) -> AIResponse:
     # -------------------------------------------------
     try:
         classifier = get_pipeline(CLASSIFIER_TASK, CLASSIFIER_MODEL_KEY)
-        tokenizer = get_tokenizer(CLASSIFIER_MODEL_KEY)  # now using utils.tokenizer
+        tokenizer = get_tokenizer(CLASSIFIER_MODEL_KEY)
 
         tokens = tokenizer.encode(
             content,

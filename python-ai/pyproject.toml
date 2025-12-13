@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=65.5.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "python_ai"
+version = "0.1.0"
+description = "Internal AI microservice for Nous backend"
+requires-python = ">=3.10"
+dependencies = [
+  "fastapi",
+  "uvicorn[standard]",
+  "transformers",
+  "torch",
+  "sentencepiece",     # Required for models like BERT, GPT, etc.
+  "numpy",
+  "python-multipart",
+  "pydantic",
+  "accelerate",
+  "beautifulsoup4",
+  "lxml",
+  "protobuf",
+  "huggingface_hub",
+  "tqdm",              # Required for progress bars
+  "boto3",             # Required for AWS interactions (for some models, e.g., PyTorch Hub)
+  "regex",             # A dependency for text processing
+  "sacremoses",        # Tokenizer dependency for BERT models
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "pytest-asyncio",
+  "black",
+  "flake8",
+] # Optional dev dependencies

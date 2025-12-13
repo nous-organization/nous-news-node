@@ -24,9 +24,8 @@ logger.setLevel(logging.INFO)
 SENTIMENT_MODEL_KEY = "distilbert-sst2"
 LLM_MODEL_KEY = "mistral-7b-instruct"
 
-MAX_INPUT_TOKENS = 512
 MAX_PROMPT_TOKENS = 384
-MAX_NEW_TOKENS = 256
+MAX_NEW_TOKENS = 256 
 
 # ---------------------------------------------------------------------
 # Optional schema validation
@@ -80,7 +79,7 @@ def detect_cognitive_bias(content: str, use_text_gen: bool = True) -> AIResponse
         encoded = tokenizer(
             content,
             truncation=True,
-            max_length=MAX_INPUT_TOKENS,
+            max_length=MAX_NEW_TOKENS,  # Replaced MAX_INPUT_TOKENS with MAX_NEW_TOKENS
             return_tensors=None,
         )
 

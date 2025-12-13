@@ -1,5 +1,5 @@
 """
-summarization.py 
+summarization.py
 
 Use AI to generate a summary of text content.
 
@@ -25,13 +25,8 @@ logger.setLevel(logging.INFO)
 # Configuration
 # ---------------------------------------------------------------------
 LLM_MODEL_KEY = "mistral-7b-instruct"
-
-MAX_INPUT_TOKENS = 512
-MAX_PROMPT_TOKENS = 384
-MAX_NEW_TOKENS = 160
-
-# Hard cap to prevent pathological inputs (HTML dumps, transcripts, etc.)
-MAX_INPUT_CHARS = 4_000
+MAX_INPUT_TOKENS = 160  # Maximum new tokens the LLM can generate
+MAX_INPUT_CHARS = 4000  # Hard cap for input length in characters
 
 # ---------------------------------------------------------------------
 # Utilities
@@ -44,7 +39,6 @@ def _fallback_summary(text: str) -> str:
     """
     sentences = re.split(r"(?<=[.!?])\s+", text.strip())
     return " ".join(sentences[:3]).strip()
-
 
 def _validate_llm_schema(obj: Dict[str, Any]) -> None:
     if not isinstance(obj, dict):
@@ -113,9 +107,7 @@ def summarize(content: Optional[str]) -> AIResponse:
         llm_response = run_llm_json(
             prompt=prompt,
             model=LLM_MODEL_KEY,
-            max_input_tokens=MAX_INPUT_TOKENS,
-            max_prompt_tokens=MAX_PROMPT_TOKENS,
-            max_new_tokens=MAX_NEW_TOKENS,
+            max_new_tokens=MAX_INPUT_TOKENS,
             temperature=0.2,
             do_sample=False,
             schema_validator=_validate_llm_schema,
@@ -143,7 +135,7 @@ def summarize(content: Optional[str]) -> AIResponse:
         errors.append(f"LLM failed: {e}")
 
     # -------------------------------------------------
-    # Fallback
+    # Fallback to extractive summary
     # -------------------------------------------------
     return AIResponse(
         status="partial",

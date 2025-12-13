@@ -1,5 +1,5 @@
 """
-philosophical.py 
+philosophical.py
 
 Generate a structured philosophical or thematic interpretation of an article.
 
@@ -19,10 +19,7 @@ from ..runners.llm_json_runner import run_llm_json
 # ---------------------------------------------------------------------
 MODEL_KEY = "mistral-7b-instruct"
 
-MAX_INPUT_TOKENS = 512
-MAX_PROMPT_TOKENS = 384
-MAX_NEW_TOKENS = 256
-
+MAX_NEW_TOKENS = 256 
 
 # ---------------------------------------------------------------------
 # Public API
@@ -53,8 +50,6 @@ def generate_philosophical_insight(content: Optional[str]) -> AIResponse:
     return run_llm_json(
         prompt=prompt,
         model=MODEL_KEY,
-        max_input_tokens=MAX_INPUT_TOKENS,
-        max_prompt_tokens=MAX_PROMPT_TOKENS,
         max_new_tokens=MAX_NEW_TOKENS,
         temperature=0.3,
         do_sample=False,

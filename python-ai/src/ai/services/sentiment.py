@@ -30,6 +30,7 @@ logger.setLevel(logging.INFO)
 # Configuration
 # ---------------------------------------------------------------------
 MAX_INPUT_TOKENS = 256
+MAX_NEW_TOKENS = 128
 
 LLM_MODEL_KEY = "mistral-7b-instruct"
 CLASSIFIER_MODEL_KEY = "distilbert-sst2"
@@ -95,9 +96,7 @@ def analyze_sentiment(content: Optional[str]) -> AIResponse:
         llm_response = run_llm_json(
             prompt=prompt,
             model=LLM_MODEL_KEY,
-            max_input_tokens=MAX_INPUT_TOKENS,
-            max_prompt_tokens=192,
-            max_new_tokens=128,
+            max_new_tokens=MAX_NEW_TOKENS,
             temperature=0.0,
             do_sample=False,
             schema_validator=_validate_llm_schema,

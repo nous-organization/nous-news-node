@@ -21,7 +21,11 @@ _tokenizer_lock = threading.Lock()
 DEFAULT_MODEL = "distilbert-sst2"
 
 
-def get_tokenizer(model_name: str = DEFAULT_MODEL, local_files_only: bool = False) -> AutoTokenizer:
+def get_tokenizer(model_name: str = DEFAULT_MODEL, local_files_only: bool = False):
+    """
+    Retrieve a shared tokenizer instance for the given model.
+    Lazy-loads the tokenizer on first use and caches it.
+    """
     with _tokenizer_lock:
         if model_name in _tokenizer_instances:
             return _tokenizer_instances[model_name]
@@ -29,7 +33,7 @@ def get_tokenizer(model_name: str = DEFAULT_MODEL, local_files_only: bool = Fals
         try:
             tokenizer = AutoTokenizer.from_pretrained(
                 model_name,
-                local_files_only=local_files_only,  # <-- use local_only flag
+                local_files_only=local_files_only,
             )
             _tokenizer_instances[model_name] = tokenizer
             logger.info(f"Tokenizer loaded for model '{model_name}'")
@@ -37,6 +41,7 @@ def get_tokenizer(model_name: str = DEFAULT_MODEL, local_files_only: bool = Fals
         except Exception as e:
             logger.exception(f"Failed to load tokenizer '{model_name}'")
             raise
+
 
 
 # -----------------------------

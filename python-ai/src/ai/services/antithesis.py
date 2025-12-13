@@ -1,15 +1,3 @@
-"""
-antithesis.py
-
-Generate an 'antithesis' summary for an article — a concise synthesis of
-the strongest opposing viewpoint or counter-narrative to the article’s
-main thrust.
-
-Designed for:
-- mistral-7b-instruct
-- llama-3-instruct
-"""
-
 from typing import Optional
 import logging
 
@@ -29,7 +17,7 @@ MAX_NEW_TOKENS = 160
 # ---------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------
-def generate_antithesis(content: Optional[str]) -> AIResponse:
+def generate_antithesis(content: Optional[str], model_key: str = "mistral-7b-instruct") -> AIResponse:
     """
     Generate an antithesis (counter-argument) for a given text.
 
@@ -37,6 +25,9 @@ def generate_antithesis(content: Optional[str]) -> AIResponse:
     ----------
     content : Optional[str]
         Input article or passage.
+
+    model_key : str
+        The key of the model to use for generation. Defaults to "mistral-7b-instruct".
 
     Returns
     -------
@@ -59,9 +50,12 @@ def generate_antithesis(content: Optional[str]) -> AIResponse:
 
     try:
         # ---------------------------------------------------
-        # Load Mistral instruction model
+        # Load model based on provided key
         # ---------------------------------------------------
-        llm_bundle = get_pipeline("text-generation", "mistral-7b-instruct")
+        llm_bundle = get_pipeline(
+            "text-generation",
+            model_key,
+        )
 
         llm_generate = llm_bundle["generate"]
         llm_tokenizer = llm_bundle["tokenizer"]
@@ -103,6 +97,13 @@ def generate_antithesis(content: Optional[str]) -> AIResponse:
         meta["output_tokens_est"] = len(
             llm_tokenizer.encode(antithesis_text)
         )
+
+        # ---------------------------------------------------
+        # Validation for too short antithesis
+        # ---------------------------------------------------
+        if len(antithesis_text.split()) < 5:
+            errors.append("Generated antithesis is too short.")
+            antithesis_text = ""
 
     except Exception as e:
         logger.exception("Antithesis generation failed")

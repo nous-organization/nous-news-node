@@ -30,7 +30,7 @@ from .philosophical import generate_philosophical_insight
 from ..types import AIResponse
 
 
-def run_analyzer(fn, content: str, label: str, parent_errors: List[str]) -> Optional[Dict[str, Any]]:
+def run_analyzer(fn, content: str, label: str, parent_errors: List[str], job_id: Optional[str]) -> Optional[Dict[str, Any]]:
     """
     Runs a single analysis function on the article content.
 
@@ -39,6 +39,7 @@ def run_analyzer(fn, content: str, label: str, parent_errors: List[str]) -> Opti
         content: Text content of the article.
         label: Name of the analysis module (used for error tagging).
         parent_errors: List to collect errors from this analyzer.
+        job_id: Job identifier for tracking.
 
     Returns:
         The `.data` field of the AIResponse, or None if the analyzer fails.
@@ -89,14 +90,15 @@ def analyze_article(article: Dict[str, Any], job_id: Optional[str] = None) -> AI
             meta={"job_id": job_id},
         )
 
+    # Initialize errors list
     errors: List[str] = []
 
     # Run each sub-analyzer sequentially
-    political_bias = run_analyzer(detect_political_bias, content, "political_bias", errors)
-    sentiment = run_analyzer(analyze_sentiment, content, "sentiment", errors)
-    cognitive_biases = run_analyzer(detect_cognitive_bias, content, "cognitive_biases", errors)
-    antithesis = run_analyzer(generate_antithesis, content, "antithesis", errors)
-    philosophical = run_analyzer(generate_philosophical_insight, content, "philosophical", errors)
+    political_bias = run_analyzer(detect_political_bias, content, "political_bias", errors, job_id)
+    sentiment = run_analyzer(analyze_sentiment, content, "sentiment", errors, job_id)
+    cognitive_biases = run_analyzer(detect_cognitive_bias, content, "cognitive_biases", errors, job_id)
+    antithesis = run_analyzer(generate_antithesis, content, "antithesis", errors, job_id)
+    philosophical = run_analyzer(generate_philosophical_insight, content, "philosophical", errors, job_id)
 
     # Compose final structured output
     analyzed = {
