@@ -1,6 +1,8 @@
 import pytest
-from src.ai.services import political_bias
-from src.ai.types import AIResponse
+from ai.services import political_bias
+
+# Allowed political bias values
+POLITICAL_BIAS_VALUES = {"left", "center", "right", "uncertain"}
 
 # ------------------------------
 # Basic political bias detection
@@ -13,62 +15,63 @@ def test_political_bias_basic():
     text = "The new tax policy benefits the wealthy."
     result = political_bias.detect_political_bias(text)
 
-    assert isinstance(result, AIResponse), "Result should be an AIResponse instance."
-    assert "political_bias" in result.data, "Response data must contain 'political_bias'."
-    assert result.data["political_bias"] in {"left", "center", "right", "uncertain"}, \
-        f"Unexpected political_bias value: {result.data['political_bias']}"
+    assert isinstance(result, dict)
+    assert "status" in result and result["status"] in {"ok", "partial", "error"}
+    assert "data" in result and isinstance(result["data"], dict)
+    assert "errors" in result
+    assert "meta" in result
+
+    assert "political_bias" in result["data"]
+    assert result["data"]["political_bias"] in POLITICAL_BIAS_VALUES
+
 
 # ------------------------------
 # Political bias detection with neutral text
 # ------------------------------
 def test_political_bias_neutral():
-    """
-    Text that should not strongly indicate any political leaning.
-    """
     text = "The sky is blue and water is wet."
     result = political_bias.detect_political_bias(text)
 
-    assert isinstance(result, AIResponse)
-    assert "political_bias" in result.data
-    # Neutral / uncertain classification
-    assert result.data["political_bias"] in {"left", "center", "right", "uncertain"}
+    assert isinstance(result, dict)
+    assert "data" in result and isinstance(result["data"], dict)
+    assert "political_bias" in result["data"]
+    assert result["data"]["political_bias"] in POLITICAL_BIAS_VALUES
+
 
 # ------------------------------
 # Political bias detection with left-leaning text
 # ------------------------------
 def test_political_bias_left_leaning():
-    """
-    Example text that is likely to be left-leaning.
-    """
     text = "We need to increase social welfare and healthcare access for all."
     result = political_bias.detect_political_bias(text)
 
-    assert isinstance(result, AIResponse)
-    assert result.data["political_bias"] in {"left", "center", "right", "uncertain"}
+    assert isinstance(result, dict)
+    assert "data" in result and isinstance(result["data"], dict)
+    assert "political_bias" in result["data"]
+    assert result["data"]["political_bias"] in POLITICAL_BIAS_VALUES
+
 
 # ------------------------------
 # Political bias detection with right-leaning text
 # ------------------------------
 def test_political_bias_right_leaning():
-    """
-    Example text that is likely to be right-leaning.
-    """
     text = "Lowering taxes encourages business growth and innovation."
     result = political_bias.detect_political_bias(text)
 
-    assert isinstance(result, AIResponse)
-    assert result.data["political_bias"] in {"left", "center", "right", "uncertain"}
+    assert isinstance(result, dict)
+    assert "data" in result and isinstance(result["data"], dict)
+    assert "political_bias" in result["data"]
+    assert result["data"]["political_bias"] in POLITICAL_BIAS_VALUES
+
 
 # ------------------------------
 # Political bias detection with empty input
 # ------------------------------
 def test_political_bias_empty():
-    """
-    Empty input should return a valid response with 'uncertain' bias.
-    """
     text = ""
     result = political_bias.detect_political_bias(text)
 
-    assert isinstance(result, AIResponse)
-    assert "political_bias" in result.data
-    assert result.data["political_bias"] in {"left", "center", "right", "uncertain"}
+    assert isinstance(result, dict)
+    assert "data" in result and isinstance(result["data"], dict)
+    assert "political_bias" in result["data"]
+    assert result["data"]["political_bias"] in POLITICAL_BIAS_VALUES

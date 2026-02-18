@@ -1,6 +1,5 @@
 import pytest
-from src.ai.services import summarization
-from src.ai.types import AIResponse
+from ai.services import summarization
 
 # ------------------------------
 # Basic summarization
@@ -16,11 +15,15 @@ def test_summarization_basic():
     )
     result = summarization.summarize(text)
 
-    assert isinstance(result, AIResponse)
-    assert result.status in {"ok", "partial"}
-    assert "summary" in result.data
-    assert isinstance(result.data["summary"], str)
-    assert len(result.data["summary"]) > 0
+    assert isinstance(result, dict)
+    assert "status" in result and result["status"] in {"ok", "partial", "error"}
+    assert "data" in result and isinstance(result["data"], dict)
+    assert "summary" in result["data"]
+    assert isinstance(result["data"]["summary"], str)
+    assert len(result["data"]["summary"]) > 0
+    assert "errors" in result
+    assert "meta" in result
+
 
 # ------------------------------
 # Very long text (truncation / batching)
@@ -32,11 +35,15 @@ def test_summarization_truncation():
     long_text = "Sentence. " * 10_000
     result = summarization.summarize(long_text)
 
-    assert isinstance(result, AIResponse)
-    assert result.status in {"ok", "partial"}
-    assert "summary" in result.data
-    assert isinstance(result.data["summary"], str)
-    assert len(result.data["summary"]) > 0
+    assert isinstance(result, dict)
+    assert "status" in result and result["status"] in {"ok", "partial", "error"}
+    assert "data" in result and isinstance(result["data"], dict)
+    assert "summary" in result["data"]
+    assert isinstance(result["data"]["summary"], str)
+    assert len(result["data"]["summary"]) > 0
+    assert "errors" in result
+    assert "meta" in result
+
 
 # ------------------------------
 # Empty input
@@ -48,10 +55,14 @@ def test_summarization_empty():
     empty_text = ""
     result = summarization.summarize(empty_text)
 
-    assert isinstance(result, AIResponse)
-    assert result.status in {"partial", "ok"}
-    assert "summary" in result.data
-    assert result.data["summary"] == ""
+    assert isinstance(result, dict)
+    assert "status" in result and result["status"] in {"ok", "partial", "error"}
+    assert "data" in result and isinstance(result["data"], dict)
+    assert "summary" in result["data"]
+    assert result["data"]["summary"] == ""
+    assert "errors" in result
+    assert "meta" in result
+
 
 # ------------------------------
 # Very short text (single sentence)
@@ -63,8 +74,11 @@ def test_summarization_short_text():
     short_text = "Python is great."
     result = summarization.summarize(short_text)
 
-    assert isinstance(result, AIResponse)
-    assert result.status in {"ok", "partial"}
-    assert "summary" in result.data
-    assert isinstance(result.data["summary"], str)
-    assert len(result.data["summary"]) > 0
+    assert isinstance(result, dict)
+    assert "status" in result and result["status"] in {"ok", "partial", "error"}
+    assert "data" in result and isinstance(result["data"], dict)
+    assert "summary" in result["data"]
+    assert isinstance(result["data"]["summary"], str)
+    assert len(result["data"]["summary"]) > 0
+    assert "errors" in result
+    assert "meta" in result

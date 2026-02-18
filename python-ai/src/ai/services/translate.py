@@ -203,7 +203,7 @@ def translate(content: str, target_language: Optional[str] = None) -> AIResponse
 
         llm_response = run_llm_json(
             prompt=prompt,
-            model=LLM_MODEL_KEY,
+            model_key=LLM_MODEL_KEY,
             max_new_tokens=512,
             max_prompt_tokens=384,
             temperature=0.0,

@@ -1,8 +1,10 @@
+# models.py
 import os
 import logging
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from .config import MODEL_DIR
+from .model_registry import MODELS
 from huggingface_hub import snapshot_download
 
 import torch
@@ -15,7 +17,6 @@ from transformers import (
 )
 
 from .utils.device import get_device
-from .utils.tokenizer import get_tokenizer
 
 # ---------------------------------------------------------------------
 # Logging Setup
@@ -35,47 +36,8 @@ DEVICE = get_device()
 logger.info(f"[models] Using device: {DEVICE}")
 
 # ---------------------------------------------------------------------
-# Model Registry
+# Caches - These persist across module imports
 # ---------------------------------------------------------------------
-# The registry of models, their tasks, and the model classes to be used.
-MODELS: Dict[str, Dict[str, Any]] = {
-    "distilbert-sst2": {
-        "hf_id": "distilbert/distilbert-base-uncased-finetuned-sst-2-english",  # Hugging Face Model ID
-        "task": "text-classification",
-        "pipeline": False,
-        "model_class": "modelForSequenceClassification",  # Correct model class for PyTorch Hub
-    },
-    "bert-ner": {
-        "hf_id": "dslim/bert-base-NER",  # Hugging Face Model ID
-        "task": "token-classification",
-        "pipeline": False,
-        "model_class": "modelForTokenClassification",  # Correct model class for PyTorch Hub
-    },
-    "gpt2": {
-        "hf_id": "gpt2",  # Hugging Face Model ID
-        "task": "text-generation",
-        "pipeline": False,
-        "model_class": "modelForCausalLM",  # Correct model class for PyTorch Hub
-    },
-    "political-leaning": {
-        "hf_id": "matous-volf/political-leaning-deberta-large",
-        "task": "text-classification",
-        "pipeline": False,
-        "model_class": "modelForSequenceClassification",
-        "labels": ["left", "center", "right"],
-    },
-    "mistral-7b-instruct": {
-        "hf_id": "mistralai/Mistral-7B-Instruct-v0.2",  # UpdatPed model ID for simplicity
-        "task": "text-generation",
-        "pipeline": False,
-        "model_class": "modelForCausalLM",  # Correct model class for PyTorch Hub
-    }
-}
-
-# ---------------------------------------------------------------------
-# Caches
-# ---------------------------------------------------------------------
-# Caches for storing loaded pipelines and models to avoid re-loading
 _PIPELINE_CACHE: Dict[str, Any] = {}
 _MANUAL_MODEL_CACHE: Dict[str, Any] = {}
 
@@ -85,16 +47,17 @@ _MANUAL_MODEL_CACHE: Dict[str, Any] = {}
 def get_pipeline(task: str, model_key: str):
     """
     Retrieve a pipeline or manual model bundle for a given task and model key.
+    Uses aggressive caching to avoid reloading models.
     
     Args:
         task (str): The task for the model (e.g., "text-classification").
         model_key (str): The key for the model in the registry.
         
     Returns:
-        Pipeline or Model Bundle: The loaded pipeline or model bundle (depending on the task).
+        Pipeline or Model Bundle: The loaded pipeline or model bundle.
         
     Raises:
-        ValueError: If the model_key is unknown or not registered.
+        ValueError: If the model_key is unknown.
     """
     spec = MODELS.get(model_key)
     if spec is None:
@@ -105,61 +68,119 @@ def get_pipeline(task: str, model_key: str):
 
     return _load_manual_model(model_key, spec)
 
+
+def clear_model_cache(model_key: Optional[str] = None):
+    """
+    Clear cached models from memory.
+    
+    Args:
+        model_key: If provided, only clear this specific model.
+                   If None, clear all cached models.
+    """
+    global _PIPELINE_CACHE, _MANUAL_MODEL_CACHE
+    
+    if model_key:
+        # Clear specific model
+        cache_keys_to_remove = [k for k in _PIPELINE_CACHE if model_key in k]
+        for key in cache_keys_to_remove:
+            del _PIPELINE_CACHE[key]
+        
+        if model_key in _MANUAL_MODEL_CACHE:
+            del _MANUAL_MODEL_CACHE[model_key]
+        
+        logger.info(f"Cleared cache for model: {model_key}")
+    else:
+        # Clear all
+        _PIPELINE_CACHE.clear()
+        _MANUAL_MODEL_CACHE.clear()
+        logger.info("Cleared all model caches")
+    
+    # Force garbage collection
+    import gc
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+
 # ---------------------------------------------------------------------
 # Pipeline Loader
 # ---------------------------------------------------------------------
 def _load_pipeline(model_key: str, spec: Dict[str, Any]):
     """
-    Loads the model pipeline for a given task.
-    
-    Args:
-        model_key (str): The key for the model in the registry.
-        spec (dict): The model specifications including task, model class, and other properties.
-        
-    Returns:
-        Pipeline: The model pipeline for the specified task.
-        
-    Raises:
-        Exception: If the pipeline cannot be loaded.
+    Load a Hugging Face pipeline for a given model key.
+    Implements aggressive caching to avoid reloading.
     """
     cache_key = f"{spec['task']}:{model_key}"
+    
+    # Return cached pipeline if available
     if cache_key in _PIPELINE_CACHE:
+        logger.debug(f"[models] Using cached pipeline for {model_key}")
         return _PIPELINE_CACHE[cache_key]
 
-    logger.info(f"[models] Loading pipeline → {spec['hf_id']}")
+    model_path = Path(spec.get("local_path") or spec["hf_id"])
+    logger.info(f"[models] Loading pipeline → {model_path}")
 
     device_map = None
     dtype = torch.float32
+    
+    # Use mixed precision on GPU
+    if DEVICE.type in ["cuda", "mps"]:
+        device_map = "auto"
+        dtype = torch.float16
 
-    if DEVICE.type == "cuda":
-        device_map = "auto"
-        dtype = torch.float16
-    elif DEVICE.type == "mps":
-        device_map = "auto"
-        dtype = torch.float16
+    # Ensure model exists locally
+    if not model_path.exists() and "hf_id" in spec:
+        logger.warning(f"[models] Model not found locally, downloading from HF → {spec['hf_id']}")
+        snapshot_download(repo_id=spec["hf_id"], local_dir=str(model_path))
 
     try:
-        pipe = pipeline(
-            task=spec["task"],
-            model=spec["hf_id"],
-            tokenizer=spec["hf_id"],
-            device_map=device_map,
-            dtype=dtype,
-            cache_dir=str(MODEL_DIR),  # Cache directory updated here
-        )
+        # Common pipeline kwargs
+        pipeline_kwargs = {
+            "task": spec["task"],
+            "model": str(model_path),
+            "tokenizer": str(model_path),
+            "device_map": device_map,
+            "torch_dtype": dtype,
+            "cache_dir": str(MODEL_DIR),
+            "local_files_only": True,  # Force local loading
+        }
+        
+        # Handle Mistral-specific model loading logic
+        if model_key == "mistral-7b-instruct":
+            pipeline_kwargs["task"] = "text-generation"
+            # Note: fix_mistral_regex is not a pipeline parameter
+            # It needs to be set when loading the tokenizer separately
+        
+        pipe = pipeline(**pipeline_kwargs)
+        
+        # Cache the pipeline for future use
         _PIPELINE_CACHE[cache_key] = pipe
+        logger.info(f"[models] ✓ Loaded and cached pipeline for {model_key}")
+        
         return pipe
+        
     except Exception as e:
         logger.error(f"Error loading pipeline for {model_key}: {e}")
         raise
+
 
 # ---------------------------------------------------------------------
 # Manual Model Loader
 # ---------------------------------------------------------------------
 def _load_manual_model(model_key: str, spec: Dict[str, Any]):
-    hf_id = spec["hf_id"]
+    """
+    Load a manual model (non-pipeline) from local path.
+    Implements aggressive caching to avoid reloading.
+    """
+    # Return cached model if available
+    if model_key in _MANUAL_MODEL_CACHE:
+        logger.debug(f"[models] Using cached model for {model_key}")
+        return _MANUAL_MODEL_CACHE[model_key]
+    
     task = spec["task"]
+    model_path = Path(spec.get("local_path") or spec["hf_id"])
 
+    # Determine the model class
     if task == "text-classification":
         model_class = AutoModelForSequenceClassification
     elif task == "text-generation":
@@ -169,26 +190,33 @@ def _load_manual_model(model_key: str, spec: Dict[str, Any]):
     else:
         raise ValueError(f"Unsupported task type: {task}")
 
-    local_model_path = Path(MODEL_DIR) / model_key
+    # Ensure model exists locally
+    if not model_path.exists() and "hf_id" in spec:
+        logger.warning(f"[models] Model not found locally, downloading from HF → {spec['hf_id']}")
+        snapshot_download(repo_id=spec["hf_id"], local_dir=str(model_path))
 
-    # Prefetch using snapshot_download if missing
-    if not local_model_path.exists():
-        logger.warning(f"Model not found locally at {local_model_path}. Downloading...")
-        snapshot_download(repo_id=hf_id, local_dir=str(local_model_path))
+    logger.info(f"[models] Loading manual model → {model_path}")
 
-    logger.info(f"Loading model from local path: {local_model_path}")
-    # Always load from local_model_path after prefetch
-    tokenizer = AutoTokenizer.from_pretrained(local_model_path)
-    model = model_class.from_pretrained(local_model_path)
+    # Load tokenizer with special handling for specific models
+    tokenizer_kwargs = {"local_files_only": True}
+    if model_key == "political-leaning":
+        tokenizer_kwargs["fix_mistral_regex"] = True
+    
+    tokenizer = AutoTokenizer.from_pretrained(model_path, **tokenizer_kwargs)
+    
+    # Load model with optimizations
+    model_kwargs = {"local_files_only": True}
+    if DEVICE.type in ["cuda", "mps"]:
+        model_kwargs["torch_dtype"] = torch.float16
+    
+    model = model_class.from_pretrained(model_path, **model_kwargs)
+    model.to(DEVICE)
     model.eval()
 
-
-    bundle = {
-        "model": model,
-        "tokenizer": tokenizer,
-        "task": task,
-    }
-
+    bundle = {"model": model, "tokenizer": tokenizer, "task": task}
+    
+    # Cache the model bundle for future use
     _MANUAL_MODEL_CACHE[model_key] = bundle
+    logger.info(f"[models] ✓ Loaded and cached model for {model_key}")
+    
     return bundle
-

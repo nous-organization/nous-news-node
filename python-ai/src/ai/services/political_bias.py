@@ -78,7 +78,7 @@ def detect_political_bias(content: Optional[str]) -> AIResponse:
 
         llm_response = run_llm_json(
             prompt=prompt,
-            model=LLM_MODEL_KEY,
+            model_key=LLM_MODEL_KEY,
             max_new_tokens=128,  # Keeps this as it limits the output length
             temperature=0.2,
             do_sample=False,

@@ -3,6 +3,9 @@ uvicorn[standard]
 transformers
 torch
 sentencepiece
+bitsandbytes
+# mistral_inference # Enable if xformers works on your machine
+# mistral_common
 numpy
 python-multipart
 pydantic

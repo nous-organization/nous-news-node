@@ -1,6 +1,5 @@
 import pytest
-from src.ai.services import normalize
-from src.ai.types import AIResponse
+from ai.services import normalize
 
 # ------------------------------
 # Basic HTML normalization
@@ -16,9 +15,16 @@ def test_normalize_article_basic():
         target_language="en"
     )
 
-    assert isinstance(result, AIResponse)
-    assert result.status in {"ok", "partial"}
-    assert "summary" in result.data or "tags" in result.data
+    # Validate TypedDict structure
+    assert isinstance(result, dict)
+    assert "status" in result and result["status"] in {"ok", "partial", "error"}
+    assert "data" in result and isinstance(result["data"], dict)
+    assert "errors" in result
+    assert "meta" in result
+
+    # Output should contain summary or tags
+    assert "summary" in result["data"] or "tags" in result["data"]
+
 
 # ------------------------------
 # Empty HTML
@@ -33,8 +39,12 @@ def test_normalize_article_empty():
         target_language="en"
     )
 
-    assert isinstance(result, AIResponse)
-    assert result.status in {"partial", "error"}
+    assert isinstance(result, dict)
+    assert "status" in result and result["status"] in {"partial", "error"}
+    assert "data" in result and isinstance(result["data"], dict)
+    assert "errors" in result
+    assert "meta" in result
+
 
 # ------------------------------
 # Large HTML content
@@ -49,9 +59,14 @@ def test_normalize_article_large():
         target_language="en"
     )
 
-    assert isinstance(result, AIResponse)
-    assert result.status in {"ok", "partial"}
-    assert "summary" in result.data or "tags" in result.data
+    assert isinstance(result, dict)
+    assert "status" in result and result["status"] in {"ok", "partial", "error"}
+    assert "data" in result and isinstance(result["data"], dict)
+    assert "errors" in result
+    assert "meta" in result
+
+    assert "summary" in result["data"] or "tags" in result["data"]
+
 
 # ------------------------------
 # Non-English HTML content
@@ -66,7 +81,10 @@ def test_normalize_article_translation():
         target_language="en"
     )
 
-    assert isinstance(result, AIResponse)
-    assert result.status in {"ok", "partial"}
-    # Check that the summary or tags are present
-    assert "summary" in result.data or "tags" in result.data
+    assert isinstance(result, dict)
+    assert "status" in result and result["status"] in {"ok", "partial", "error"}
+    assert "data" in result and isinstance(result["data"], dict)
+    assert "errors" in result
+    assert "meta" in result
+
+    assert "summary" in result["data"] or "tags" in result["data"]

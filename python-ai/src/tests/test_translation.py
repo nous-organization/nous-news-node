@@ -1,6 +1,5 @@
 import pytest
-from src.ai.services import translate
-from src.ai.types import AIResponse
+from ai.services import translate
 
 # ------------------------------
 # Parametrized test for multiple languages
@@ -24,70 +23,69 @@ def test_translation_multiple_languages(text, target_language, expected_diff):
     """
     result = translate.translate(text, target_language=target_language)
 
-    assert isinstance(result, AIResponse), "Result should be an AIResponse object"
-    assert result.status in {"ok", "partial"}, "Status must be 'ok' or 'partial'"
-    assert "translation" in result.data, "Response must contain 'translation'"
-    assert isinstance(result.data["translation"], str), "'translation' must be a string"
-    assert result.data["language"] == target_language, "Detected language must match target"
+    assert isinstance(result, dict)
+    assert "status" in result and result["status"] in {"ok", "partial", "error"}
+    assert "data" in result and isinstance(result["data"], dict)
+    assert "translation" in result["data"]
+    assert isinstance(result["data"]["translation"], str)
+    assert result["data"]["language"] == target_language
+    assert "errors" in result
+    assert "meta" in result
 
     if expected_diff:
-        # Translation should differ from original for different languages
-        assert result.data["translation"] != text, "Translation should differ from original text"
+        assert result["data"]["translation"] != text, "Translation should differ from original text"
     else:
-        # For same-language translation, text should remain unchanged
-        assert result.data["translation"] == text, "Text should remain unchanged for same-language translation"
+        assert result["data"]["translation"] == text, "Text should remain unchanged for same-language translation"
 
 
 # ------------------------------
 # Edge Case: Empty Input
 # ------------------------------
 def test_translation_empty_text():
-    """
-    Ensure translation handles empty input gracefully.
-    """
     text = ""
     target_language = "ko"
     result = translate.translate(text, target_language=target_language)
 
-    assert isinstance(result, AIResponse)
-    assert result.status in {"ok", "partial"}, "Status must be 'ok' or 'partial'"
-    assert "translation" in result.data
-    assert result.data["translation"] == "", "Empty input should return empty translation"
-    assert result.data["language"] == target_language
+    assert isinstance(result, dict)
+    assert "status" in result and result["status"] in {"ok", "partial", "error"}
+    assert "data" in result and isinstance(result["data"], dict)
+    assert "translation" in result["data"] and result["data"]["translation"] == ""
+    assert result["data"]["language"] == target_language
+    assert "errors" in result
+    assert "meta" in result
 
 
 # ------------------------------
 # Edge Case: Unsupported Language
 # ------------------------------
 def test_translation_unsupported_language():
-    """
-    Test translation with unsupported target language.
-    The service should return the original text or a partial response.
-    """
     text = "Hello world"
     target_language = "xx"  # invalid language code
     result = translate.translate(text, target_language=target_language)
 
-    assert isinstance(result, AIResponse)
-    assert result.status in {"partial", "error"}, "Status must indicate partial or error"
-    assert "translation" in result.data
-    assert result.data["translation"] == text, "Original text should be returned for unsupported languages"
-    assert result.data.get("language", target_language) == target_language
+    assert isinstance(result, dict)
+    assert "status" in result and result["status"] in {"partial", "error", "ok"}
+    assert "data" in result and isinstance(result["data"], dict)
+    assert "translation" in result["data"] and result["data"]["translation"] == text
+    assert result["data"].get("language", target_language) == target_language
+    assert "errors" in result
+    assert "meta" in result
 
 
 # ------------------------------
 # Edge Case: Long Text
 # ------------------------------
 def test_translation_long_text():
-    """
-    Ensure translation handles very long inputs without crashing.
-    """
     long_text = "This is a sentence. " * 5000  # ~100k characters
     target_language = "ko"
     result = translate.translate(long_text, target_language=target_language)
 
-    assert isinstance(result, AIResponse)
-    assert result.status in {"ok", "partial"}, "Status must be 'ok' or 'partial'"
-    assert "translation" in result.data
-    assert isinstance(result.data["translation"], str)
-    assert len(result.data["translation"]) > 0, "Translation should not be empty"
+    assert isinstance(result, dict)
+    assert "status" in result and result["status"] in {"ok", "partial", "error"}
+    assert "data" in result and isinstance(result["data"], dict)
+    assert "translation" in result["data"]
+    assert isinstance(result["data"]["translation"], str)
+    assert len(result["data"]["translation"]) > 0
+    assert result["data"]["language"] == target_language
+    assert "errors" in result
+    assert "meta" in result

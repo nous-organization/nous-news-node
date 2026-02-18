@@ -1,6 +1,5 @@
 import pytest
-from src.ai.services import antithesis
-from src.ai.types import AIResponse
+from ai.services import antithesis
 
 # ------------------------------
 # Basic antithesis generation
@@ -12,11 +11,15 @@ def test_antithesis_basic():
     text = "Technology is making life better."
     result = antithesis.generate_antithesis(text)
 
-    assert isinstance(result, AIResponse), "Result must be an AIResponse instance."
-    assert result.status in {"ok", "error"}, f"Unexpected status: {result.status}"
-    assert "antithesis" in result.data, "Response data must contain 'antithesis'."
-    assert isinstance(result.data["antithesis"], str)
-    assert len(result.data["antithesis"]) > 0, "Antithesis should not be empty."
+    # Validate structure instead of isinstance
+    assert isinstance(result, dict)
+    assert "status" in result and result["status"] in {"ok", "error", "partial"}
+    assert "data" in result and isinstance(result["data"], dict)
+    assert "antithesis" in result["data"] and isinstance(result["data"]["antithesis"], str)
+    assert len(result["data"]["antithesis"]) > 0
+    assert "errors" in result
+    assert "meta" in result
+
 
 # ------------------------------
 # Antithesis with short text
@@ -28,9 +31,10 @@ def test_antithesis_short_text():
     text = "Peace"
     result = antithesis.generate_antithesis(text)
 
-    assert isinstance(result, AIResponse)
-    assert "antithesis" in result.data
-    assert isinstance(result.data["antithesis"], str)
+    assert isinstance(result, dict)
+    assert "data" in result and "antithesis" in result["data"]
+    assert isinstance(result["data"]["antithesis"], str)
+
 
 # ------------------------------
 # Antithesis with empty string
@@ -42,9 +46,10 @@ def test_antithesis_empty_input():
     text = ""
     result = antithesis.generate_antithesis(text)
 
-    assert isinstance(result, AIResponse)
-    assert "antithesis" in result.data
-    assert isinstance(result.data["antithesis"], str)
+    assert isinstance(result, dict)
+    assert "data" in result and "antithesis" in result["data"]
+    assert isinstance(result["data"]["antithesis"], str)
+
 
 # ------------------------------
 # Antithesis with long input
@@ -56,7 +61,7 @@ def test_antithesis_long_text():
     text = "Sentence. " * 5000  # simulate a long paragraph
     result = antithesis.generate_antithesis(text)
 
-    assert isinstance(result, AIResponse)
-    assert "antithesis" in result.data
-    assert isinstance(result.data["antithesis"], str)
-    assert len(result.data["antithesis"]) > 0
+    assert isinstance(result, dict)
+    assert "data" in result and "antithesis" in result["data"]
+    assert isinstance(result["data"]["antithesis"], str)
+    assert len(result["data"]["antithesis"]) > 0

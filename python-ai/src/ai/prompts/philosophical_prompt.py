@@ -18,7 +18,7 @@ def get_philosophical_prompt(text: str) -> str:
     Expected output shape:
 
     {
-      "philosophical": string,
+      "insight": string,
       "themes": string[],
       "worldview": string,
       "ethical_questions": string[],
@@ -35,7 +35,7 @@ def get_philosophical_prompt(text: str) -> str:
         "Analyze the provided text through a philosophical lens and "
         "produce EXACTLY ONE JSON OBJECT with the following structure:\n\n"
         "{\n"
-        '  "philosophical": string,\n'
+        '  "insight": string,\n'
         '  "themes": string[],\n'
         '  "worldview": string,\n'
         '  "ethical_questions": string[],\n'
@@ -43,7 +43,7 @@ def get_philosophical_prompt(text: str) -> str:
         '  "explanation": string\n'
         "}\n\n"
         "FIELD DEFINITIONS:\n"
-        "- \"philosophical\": a high-level philosophical interpretation of the text.\n"
+        "- \"insight\": a high-level philosophical interpretation of the text.\n"
         "- \"themes\": core recurring ideas (e.g., power, identity, meaning, suffering).\n"
         "- \"worldview\": the implicit view of reality, society, or human nature.\n"
         "- \"ethical_questions\": moral dilemmas or value judgments implied by the text.\n"

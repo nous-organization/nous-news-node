@@ -19,12 +19,15 @@ dependencies = [
   "accelerate",
   "beautifulsoup4",
   "lxml",
+  "bitsandbytes",
   "protobuf",
   "huggingface_hub",
-  "tqdm",              # Required for progress bars
-  "boto3",             # Required for AWS interactions (for some models, e.g., PyTorch Hub)
-  "regex",             # A dependency for text processing
-  "sacremoses",        # Tokenizer dependency for BERT models
+  # "mistral_inference", # Requies xformers (Enabled only if xformers works on your machine)
+  # "mistral_common",
+  "tqdm",       # Required for progress bars
+  "boto3",      # Required for AWS interactions (for some models, e.g., PyTorch Hub)
+  "regex",      # A dependency for text processing
+  "sacremoses", # Tokenizer dependency for BERT models
 ]
 
 [tool.setuptools.packages.find]

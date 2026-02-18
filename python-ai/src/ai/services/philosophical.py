@@ -8,7 +8,7 @@ Uses:
 - Strict JSON-only philosophical prompt
 """
 
-from typing import Optional
+from typing import Optional, List
 
 from ..types import AIResponse
 from ..prompts.philosophical_prompt import get_philosophical_prompt
@@ -18,8 +18,7 @@ from ..runners.llm_json_runner import run_llm_json
 # Configuration
 # ---------------------------------------------------------------------
 MODEL_KEY = "mistral-7b-instruct"
-
-MAX_NEW_TOKENS = 256 
+MAX_NEW_TOKENS = 256
 
 # ---------------------------------------------------------------------
 # Public API
@@ -47,14 +46,34 @@ def generate_philosophical_insight(content: Optional[str]) -> AIResponse:
 
     prompt = get_philosophical_prompt(content.strip())
 
-    return run_llm_json(
-        prompt=prompt,
-        model=MODEL_KEY,
-        max_new_tokens=MAX_NEW_TOKENS,
-        temperature=0.3,
-        do_sample=False,
-        meta={
-            "analysis_model": MODEL_KEY,
-            "analysis_type": "philosophical",
-        },
-    )
+    try:
+        llm_response = run_llm_json(
+            prompt=prompt,
+            model_key=MODEL_KEY,
+            max_new_tokens=MAX_NEW_TOKENS,
+            temperature=0.3,
+            do_sample=False,
+            meta={
+                "analysis_model": MODEL_KEY,
+                "analysis_type": "philosophical",
+            },
+        )
+
+        # Determine status
+        status = "ok" if "output" not in llm_response else "partial"
+        data = llm_response if "output" not in llm_response else {"output": llm_response["output"]}
+
+        return AIResponse(
+            status=status,
+            data=data,
+            errors=None if status == "ok" else ["LLM returned non-JSON output"],
+            meta={"method": "llm_json", **llm_response.get("meta", {})},
+        )
+
+    except Exception as e:
+        return AIResponse(
+            status="error",
+            data={},
+            errors=[str(e)],
+            meta={"method": "llm_json"},
+        )

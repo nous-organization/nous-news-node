@@ -74,19 +74,19 @@ curl -X POST http://localhost:8000/analyze \
  -H "Content-Type: application/json" \
  -d '{"content":"Some article content here"}'
 
-### AI Architecture
 
+### AI Architecture 
 philosophical.py
 └── Domain logic only
-├── choose model
-├── choose prompt
-└── call llm_json_runner()
+    ├── choose model
+    ├── choose prompt
+    └── call llm_json_runner()
 
 llm_json_runner.py
 └── Infra logic
-├── token limits
-├── truncation
-├── generation
-├── JSON extraction
-├── JSON validation
-└── consistent AIResponse
+    ├── token limits
+    ├── truncation
+    ├── generation
+    ├── JSON extraction
+    ├── JSON validation
+    └── consistent AIResponse

@@ -95,7 +95,7 @@ def analyze_sentiment(content: Optional[str]) -> AIResponse:
 
         llm_response = run_llm_json(
             prompt=prompt,
-            model=LLM_MODEL_KEY,
+            model_key=LLM_MODEL_KEY,
             max_new_tokens=MAX_NEW_TOKENS,
             temperature=0.0,
             do_sample=False,
